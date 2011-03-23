@@ -2,13 +2,16 @@ import OpalKelly.ok as ok
 import time
 import wx
 from struct import pack, unpack
+DIV1 = 120.0
+DIV2 = 10.0
 DIV_ADDR = 0x20 
+DEFAULT_FILE = "../local/projects/rsqrt_test/rsqrt_tester.bit"
 NONLINEAR_ADDR = 0x22 
 INV_ADDR = 0x24 
 
 class CountersFrame(wx.Frame):
     def __init__(self, parent):
-        wx.Frame.__init__(self, parent, -1, "FPGA Module Verifier (Python)", wx.DefaultPosition, wx.Size(280,205))
+        wx.Frame.__init__(self, parent, -1, "FPGA Module Verifier (Python)", wx.DefaultPosition, wx.Size(400,300))
 
         ID_UPDATE_TIMER = wx.NewId()
         IDC_CNT1_RESET = wx.NewId()
@@ -62,7 +65,7 @@ class CountersFrame(wx.Frame):
     def ConfigureXEM(self):
         dlg = wx.FileDialog(
                 self, message="Open the Counters bitfile (counters.bit)", defaultDir="",
-                defaultFile="./projects/rsqrt_test/counters.bit", wildcard="*.bit", style=wx.OPEN | wx.CHANGE_DIR
+                defaultFile=DEFAULT_FILE, wildcard="*.bit", style=wx.OPEN | wx.CHANGE_DIR
                 )
         
         # Show the dialog and retrieve the user response. If it is the OK response, 
@@ -111,12 +114,10 @@ class CountersFrame(wx.Frame):
         self.xem.UpdateWireIns()
 
     def OnUpdateTimer(self, evt):
-        x = 120.0
-        y = 100000
-        bitVal = ConvertType(x, fromType = 'f', toType = 'i')
+        bitVal = ConvertType(DIV1, fromType = 'f', toType = 'i')
         self.xem.SetWireInValue(0x00, bitVal >> 0, 0xffff)
         self.xem.SetWireInValue(0x01, bitVal >> 16, 0xffff)
-        bitVal = ConvertType(y, fromType = 'f', toType = 'i')
+        bitVal = ConvertType(DIV2, fromType = 'f', toType = 'i')
         self.xem.SetWireInValue(0x02, bitVal >> 0, 0xffff)
         self.xem.SetWireInValue(0x03, bitVal >> 16, 0xffff)
         self.xem.UpdateWireIns()
