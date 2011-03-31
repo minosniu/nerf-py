@@ -13,7 +13,6 @@
 %  Output:         triangle.mat, variable name: data
 % 
 %  Others:         .mat file is input for spindle_test_triangle.mdl
-% 
 
 L1=0.90;        %min length     (Mileusnic et al 2006 JNP)
 L2=1.08;        %max length

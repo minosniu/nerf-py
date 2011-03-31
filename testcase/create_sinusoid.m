@@ -12,7 +12,7 @@
 % 
 %  Output:         triangle.mat, variable name: data
 % 
-%  Others:   		asdf
+%  Others:   	   .mat file is input for spindle_test_sinusoid.mdl
 
 L1=0.995;   %average length (Mileusnic et al 2006 JNP)
 A=0.012;    %amplitude
