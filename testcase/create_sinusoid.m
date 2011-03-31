@@ -12,7 +12,7 @@
 % 
 %  Output:         triangle.mat, variable name: data
 % 
-%  Others: 
+%  Others:   
 
 L1=0.995;   %average length (Mileusnic et al 2006 JNP)
 A=0.012;    %amplitude
