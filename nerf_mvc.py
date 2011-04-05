@@ -72,7 +72,7 @@ class Model:
         # process the data.
         ## if (dlg.ShowModal() == wx.ID_OK):
         ##     bitfile = dlg.GetPath()
-        defaultDir="./projects/counter2/"
+        defaultDir="../local/projects/counter2/"
         defaultFile="counters.bit"
         ## defaultFile="counters_fp_muscle.bit"
 
@@ -271,37 +271,16 @@ class View(wx.Frame):
         self.dc.DrawText("alpha.f", 0, winScale - 62)
         self.dc.DrawText("Ia.f", 0, winScale - 30)
 
-<<<<<<< local
-        dc.DrawText("S1.e", 0, winScale + 2)
-        dc.DrawText("M1.e", 0, winScale + 34)
-        dc.DrawText("alpha.e", 0, winScale + 66)
-        dc.DrawText("Ia.e", 0, winScale + 98)
-        del dc
-=======
         self.dc.DrawText("S1.e", 0, winScale + 2)
         self.dc.DrawText("M1.e", 0, winScale + 34)
         self.dc.DrawText("alpha.e", 0, winScale + 66)
         self.dc.DrawText("Ia.e", 0, winScale + 98)
->>>>>>> other
 
-<<<<<<< local
-    def DrawPlot(self, newVal):
-        """ Redraws the plot
-        """
-        dc = wx.ClientDC(self.panel)
-=======
->>>>>>> other
         self.dispRect = self.GetClientRect()
         winScale = self.dispRect.GetHeight() * 4 / 5
         if self.xPos == 0:
-<<<<<<< local
-            self.panel.Refresh()
-            dc.Clear()
-        dc.SetPen(wx.Pen('blue', 1))
-=======
             self.dc.Clear()
         self.dc.SetPen(wx.Pen('blue', 1))
->>>>>>> other
 
         for ix in xrange(NUM_CHANNEL):
             self.dc.DrawLine(self.xPos + 60, winScale / 8 *(1 + ix) -
@@ -312,7 +291,6 @@ class View(wx.Frame):
         self.xPos += 1
         if self.xPos > 300:
             self.xPos = 0
-        del dc
 
 
     ## def DrawPlot(self, newVal):
