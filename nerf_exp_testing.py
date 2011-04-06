@@ -2,9 +2,10 @@ import OpalKelly.ok as ok
 import time
 import wx
 from struct import pack, unpack
-FLOAT_NUM = 122343.34 
-FLOOR_ADDR = 0x20 
-DEFAULT_FILE = "../local/projects/exp_test/exp_tester.bit"
+FLOAT_NUM = 10.0
+FLOOR_ADDR = 0x24 
+FLOOR_FP_ADDR = 0x22 
+DEFAULT_FILE = "../local/projects/exp_test/exp_test.bit"
 
 class CountersFrame(wx.Frame):
     def __init__(self, parent):
@@ -125,6 +126,8 @@ class CountersFrame(wx.Frame):
         outVal = ((outValHi << 16) + outValLo) & 0xFFFFFFFF
         ## print outVal
         str = "%d" % (outVal) ## "%02X" = unsigned hex integer, 2 digits
+        fpFloor = ConvertType(outVal, fromType = 'i', toType = 'f')
+        str = "%.4f" % (fpFloor) ## "%02X" = unsigned hex integer, 2 digits
         self.txtCounter1.SetLabel(str)
 
 def ConvertType(val, fromType, toType):
