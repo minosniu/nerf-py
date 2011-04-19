@@ -32,20 +32,16 @@ import numpy as np
 import pylab
 
 VIEWER_REFRESH_RATE = 40 # in ms
-NUM_CHANNEL = 8 # Number of channels
+NUM_CHANNEL = 2 # Number of channels
 IA1_ADDR = 0x20 
 II1_ADDR = 0x22 
 VAR2_ADDR = 0x24 
 VAR3_ADDR = 0x26 
-TRQ1_MINUS_TRQ2_ADDR = 0x30 
-UNDERFLOW_ADDR = 0x30 
-TRQ1_ADDR = 0x32 
-TRQ2_ADDR = 0x34 
-POS1_ADDR = 0x26 
-VEL1_ADDR = 0x28 
-POS2_ADDR = 0x36 
-VEL2_ADDR = 0x38 
-ACC_ADDR = 0x2A
+VAR4_ADDR = 0x28 
+VAR5_ADDR = 0x2A 
+VAR6_ADDR = 0x30 
+VAR7_ADDR = 0x32 
+
 DATA_EVT_IA = 0
 DATA_EVT_M1 = 1
 DATA_EVT_POS_FLEX = 3
@@ -55,12 +51,12 @@ DATA_EVT_GAMMA_DYN = 6
 DATA_EVT_CLKRATE = 7
 DATA_EVT_TRQ = 10
 ##DISPLAY_SCALING = [0.1, 500, 500, 10, 10, 10, 5, 5]
-DISPLAY_SCALING = [0.00001, 0.00001, 0.01, 1, 0, 0, 0, 0]
+DISPLAY_SCALING = [0.001, 0.00001, 10, 0.0000, 0.0001, 0, 0.000, 0.001]
 ##DISPLAY_SCALING = [0, 0.01, 0, 5, 5, 3, 3, 0.5]
 ## DATA_OUT_ADDR = [EMG2_ADDR, TRQ1_ADDR, TRQ2_ADDR, \
 ##                  POS1_ADDR, POS2_ADDR, VEL1_ADDR, VEL2_ADDR, ACC_ADDR]
 DATA_OUT_ADDR = [IA1_ADDR, II1_ADDR, VAR2_ADDR, VAR3_ADDR, \
-                 VEL1_ADDR, VEL2_ADDR, POS1_ADDR, POS2_ADDR]
+                 VAR4_ADDR, VAR5_ADDR, VAR6_ADDR, VAR7_ADDR]
 ZERO_DATA = [0.0 for ix in xrange(NUM_CHANNEL)]
 
 class Model:
@@ -93,12 +89,13 @@ class Model:
         assert self.xem.IsOpen(), "OpalKelly board NOT found!"
 
         self.xem.LoadDefaultPLLConfiguration()
+
         self.pll = ok.PLL22393()
         self.pll.SetReference(48.0)        #base clock frequency
-        self.baseRate = 200
+        self.baseRate = 100
         self.pll.SetPLLParameters(0, self.baseRate, 48,  True)            #multiply up to 400mhz
         self.pll.SetOutputSource(0, ok.PLL22393.ClkSrc_PLL0_0)  #clk1 
-        self.clkRate = 200                                #mhz; 200 is fastest
+        self.clkRate = 100                                #mhz; 200 is fastest
         self.pll.SetOutputDivider(0, self.baseRate / self.clkRate)        #div4 = 100mhz; div128 = 4mhz
         self.pll.SetOutputEnable(0, True)
         self.pll.SetOutputSource(1, ok.PLL22393.ClkSrc_PLL0_0)  #clk2
@@ -137,6 +134,7 @@ class Model:
         outVal = ConvertType(outVal, 'I', 'f')
         ## if getAddr == DATA_OUT_ADDR[0]:
         ##     print "%2.4f" % outVal, 
+        ##     ##print "%d" % (outValLo), 
         
         ## Python default int is unsigned, use pack/unpack to
         ## convert into signed
@@ -145,6 +143,14 @@ class Model:
         ##     outVal = -0x80 + outVal
             ## outVal = -(~(outVal - 0x1) & 0xFF)
         return outVal
+
+    def SendReset(self, resetValue):
+        if (resetValue) :
+            self.xem.SetWireInValue(0x00, 0x01, 0xff)
+            print resetValue,
+        else :
+            self.xem.SetWireInValue(0x00, 0x00, 0xff)
+        self.xem.UpdateWireIns()
 
     def SendPara(self, newVal, trigEvent):
         if trigEvent == DATA_EVT_IA:
@@ -417,10 +423,11 @@ class ChangerView(wx.Frame):
                                   wx.SL_HORIZONTAL | wx.SL_AUTOTICKS | wx.SL_LABELS)
         self.slider6 = wx.Slider(self.panel, -1, 0, 0, 100, (10, 10), (250, 50),
                                   wx.SL_HORIZONTAL | wx.SL_AUTOTICKS | wx.SL_LABELS)
-        self.slider7 = wx.Slider(self.panel, -1, 0, 0, 100, (10, 10), (250, 50),
+        self.slider7 = wx.Slider(self.panel, -1, 50, 0, 100, (10, 10), (250, 50),
                                   wx.SL_HORIZONTAL | wx.SL_AUTOTICKS | wx.SL_LABELS)
         self.slider8 = wx.Slider(self.panel, -1, 50, 0, 100, (10, 10), (250, 50),
                                   wx.SL_HORIZONTAL | wx.SL_AUTOTICKS | wx.SL_LABELS)
+        self.tglReset = wx.ToggleButton(self.panel, -1, "Reset", wx.Point(20,25), wx.Size(60,20))
 
         self.label1 = wx.StaticText(self.panel, -1, "Ia_bias")
         self.label2 = wx.StaticText(self.panel, -1, "M1")
@@ -449,6 +456,10 @@ class ChangerView(wx.Frame):
         self.hbox.Add(self.label7,flag=wx.ALIGN_CENTER, border=5)
         self.hbox.Add(self.slider8, border=5, flag=wx.ALL|wx.EXPAND)
         self.hbox.Add(self.label8,flag=wx.ALIGN_CENTER, border=5)
+
+        self.hbox.Add(self.tglReset, border=5, flag=wx.ALL|wx.EXPAND)
+        self.hbox.Add(self.tglReset,flag=wx.ALIGN_CENTER, border=5)
+
         self.hbox.Fit(self)
 
         self.panel.SetSizer(self.hbox)
@@ -475,6 +486,8 @@ class Controller:
         self.ctrlView.slider6.Bind(wx.EVT_SLIDER, self.SendGammaDyn)
         self.ctrlView.slider7.Bind(wx.EVT_SLIDER, self.SendClkRate)
         self.ctrlView.slider8.Bind(wx.EVT_SLIDER, self.SendExtTrq)
+       ## self.ctrlView.tglReset.Bind(wx.EVT_TOGGLEBUTTON, self.OnReset)
+        self.ctrlView.Bind(wx.EVT_TOGGLEBUTTON, self.OnReset, self.ctrlView.tglReset)
 
         pub.subscribe(self.WantMoney, "WANT MONEY")
 
@@ -520,6 +533,11 @@ class Controller:
         ## newExtTrq = (self.ctrlView.slider8.GetValue() - 50)
         newExtTrq = (self.ctrlView.slider8.GetValue() - 50) * 0.1 
         self.nerfModel.SendPara(newExtTrq, DATA_EVT_TRQ)
+
+    def OnReset(self, evt):
+        newReset = self.ctrlView.tglReset.GetValue()
+        self.nerfModel.SendReset(newReset)
+
 
     def WantMoney(self, message):
         """
