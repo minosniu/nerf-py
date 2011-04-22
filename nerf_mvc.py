@@ -52,6 +52,7 @@ DISPLAY_SCALING = [0.1, 500, 500, 10, 10, 10, 5, 5]
 ##                  POS1_ADDR, POS2_ADDR, VEL1_ADDR, VEL2_ADDR, ACC_ADDR]
 DATA_OUT_ADDR = [EMG2_ADDR, TRQ1_ADDR, TRQ2_ADDR, ACC_ADDR, \
                  VEL1_ADDR, VEL2_ADDR, POS1_ADDR, POS2_ADDR]
+OUT_TAG = ("Pos", "Pos", "Pos", "Pos", "Pos", "Pos", "Pos", "Pos")
 ZERO_DATA = [0.0 for ix in xrange(NUM_CHANNEL)]
 
 class Model:
@@ -253,7 +254,6 @@ class View(wx.Frame):
         self.pause_button.SetLabel(label)
 
     def OnPaint(self, event = None, newVal = ZERO_DATA):
-
         """ aksjdf
         """
         if ~hasattr(self, 'dc'):
@@ -261,26 +261,12 @@ class View(wx.Frame):
 
         self.dispRect = self.GetClientRect()
         winScale = self.dispRect.GetHeight() * 4 / 5
-        self.dc.DrawText("Pos", 1, winScale / 5)
-        self.dc.DrawText("Vel", 0, winScale / 5)
-        self.dc.DrawText("Flex", 0, 2*winScale / 5)
-        self.dc.DrawText("Ext", 0, 3*winScale / 5)
-
-        self.dc.DrawText("S1.f", 0, winScale - 126)
-        self.dc.DrawText("M1.f", 0, winScale - 94)
-        self.dc.DrawText("alpha.f", 0, winScale - 62)
-        self.dc.DrawText("Ia.f", 0, winScale - 30)
-
-        self.dc.DrawText("S1.e", 0, winScale + 2)
-        self.dc.DrawText("M1.e", 0, winScale + 34)
-        self.dc.DrawText("alpha.e", 0, winScale + 66)
-        self.dc.DrawText("Ia.e", 0, winScale + 98)
-
-        self.dispRect = self.GetClientRect()
-        winScale = self.dispRect.GetHeight() * 4 / 5
-        if self.xPos == 0:
-            self.dc.Clear()
         self.dc.SetPen(wx.Pen('blue', 1))
+
+        if self.xPos <= 1:
+            self.dc.Clear()
+            for ix in xrange(NUM_CHANNEL):
+                self.dc.DrawText(OUT_TAG[ix], 20, winScale / 8 *(1 + ix) - 10 )
 
         for ix in xrange(NUM_CHANNEL):
             self.dc.DrawLine(self.xPos + 60, winScale / 8 *(1 + ix) -
