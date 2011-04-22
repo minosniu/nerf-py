@@ -33,7 +33,7 @@ import pylab
 
 VIEWER_REFRESH_RATE = 40 # in ms
 NUM_CHANNEL = 2 # Number of channels
-IA1_ADDR = 0x20 
+CSS_ADDR = 0x20 
 II1_ADDR = 0x22 
 VAR2_ADDR = 0x24 
 VAR3_ADDR = 0x26 
@@ -51,11 +51,11 @@ DATA_EVT_GAMMA_DYN = 6
 DATA_EVT_CLKRATE = 7
 DATA_EVT_TRQ = 10
 ##DISPLAY_SCALING = [0.1, 500, 500, 10, 10, 10, 5, 5]
-DISPLAY_SCALING = [0.001, 0.00001, 10, 0.0000, 0.0001, 0, 0.000, 0.001]
+DISPLAY_SCALING = [20, 0.00001, 10, 0.0000, 0.0001, 0, 0.000, 0.001]
 ##DISPLAY_SCALING = [0, 0.01, 0, 5, 5, 3, 3, 0.5]
 ## DATA_OUT_ADDR = [EMG2_ADDR, TRQ1_ADDR, TRQ2_ADDR, \
 ##                  POS1_ADDR, POS2_ADDR, VEL1_ADDR, VEL2_ADDR, ACC_ADDR]
-DATA_OUT_ADDR = [IA1_ADDR, II1_ADDR, VAR2_ADDR, VAR3_ADDR, \
+DATA_OUT_ADDR = [CSS_ADDR, II1_ADDR, VAR2_ADDR, VAR3_ADDR, \
                  VAR4_ADDR, VAR5_ADDR, VAR6_ADDR, VAR7_ADDR]
 ZERO_DATA = [0.0 for ix in xrange(NUM_CHANNEL)]
 
@@ -77,8 +77,8 @@ class Model:
         # process the data.
         ## if (dlg.ShowModal() == wx.ID_OK):
         ##     bitfile = dlg.GetPath()
-        defaultDir="../local/projects/fp_spindle_test/"
-        defaultFile="fp_spindle_test.bit"
+        defaultDir="../local/projects/css_term/"
+        defaultFile="css_term_test.bit"
         ## defaultFile="counters_fp_muscle.bit"
 
         bitfile = defaultDir + defaultFile
@@ -95,7 +95,7 @@ class Model:
         self.baseRate = 100
         self.pll.SetPLLParameters(0, self.baseRate, 48,  True)            #multiply up to 400mhz
         self.pll.SetOutputSource(0, ok.PLL22393.ClkSrc_PLL0_0)  #clk1 
-        self.clkRate = 20                                #mhz; 200 is fastest
+        self.clkRate = 100                                #mhz; 200 is fastest
         self.pll.SetOutputDivider(0, self.baseRate / self.clkRate)        #div4 = 100mhz; div128 = 4mhz
         self.pll.SetOutputEnable(0, True)
         self.pll.SetOutputSource(1, ok.PLL22393.ClkSrc_PLL0_0)  #clk2
@@ -134,7 +134,7 @@ class Model:
         outVal = ConvertType(outVal, 'I', 'f')
         ## if getAddr == DATA_OUT_ADDR[0]:
         ##     print "%2.4f" % outVal, 
-        ##     ##print "%d" % (outValLo), 
+            ##print "%d" % (outValLo), 
         
         ## Python default int is unsigned, use pack/unpack to
         ## convert into signed
@@ -423,7 +423,7 @@ class ChangerView(wx.Frame):
                                   wx.SL_HORIZONTAL | wx.SL_AUTOTICKS | wx.SL_LABELS)
         self.slider6 = wx.Slider(self.panel, -1, 0, 0, 100, (10, 10), (250, 50),
                                   wx.SL_HORIZONTAL | wx.SL_AUTOTICKS | wx.SL_LABELS)
-        self.slider7 = wx.Slider(self.panel, -1, 0, 0, 100, (10, 10), (250, 50),
+        self.slider7 = wx.Slider(self.panel, -1, 50, 0, 100, (10, 10), (250, 50),
                                   wx.SL_HORIZONTAL | wx.SL_AUTOTICKS | wx.SL_LABELS)
         self.slider8 = wx.Slider(self.panel, -1, 50, 0, 100, (10, 10), (250, 50),
                                   wx.SL_HORIZONTAL | wx.SL_AUTOTICKS | wx.SL_LABELS)
@@ -507,7 +507,7 @@ class Controller:
 
     def SendPosFlex(self, event):
         ## newExtTrq = (self.ctrlView.slider8.GetValue() - 50)
-        newPosFlex = 1.0 + (self.ctrlView.slider3.GetValue() - 50) / 10.0 
+        newPosFlex = (self.ctrlView.slider3.GetValue()) / 5000.0 
         self.nerfModel.SendPara(newPosFlex, DATA_EVT_POS_FLEX)
 
     def SendVelFlex(self, event):
