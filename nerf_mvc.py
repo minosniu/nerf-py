@@ -30,7 +30,7 @@ import numpy as np
 import pylab
 
 VIEWER_REFRESH_RATE = 40 # in ms
-NUM_CHANNEL = 8 # Number of channels
+NUM_CHANNEL = 6 # Number of channels
 EMG1_ADDR = 0x20 
 EMG2_ADDR = 0x22 
 TRQ1_MINUS_TRQ2_ADDR = 0x30 
@@ -46,12 +46,13 @@ DATA_EVT_IA = 0
 DATA_EVT_M1 = 1
 DATA_EVT_CLKRATE = 7
 DATA_EVT_TRQ = 10
-DISPLAY_SCALING = [0.1, 500, 500, 10, 10, 10, 5, 5]
+DISPLAY_SCALING = [0.1, 0.1, 300, 10, 5, 5]
 ##DISPLAY_SCALING = [0, 0.01, 0, 5, 5, 3, 3, 0.5]
 ## DATA_OUT_ADDR = [EMG2_ADDR, TRQ1_ADDR, TRQ2_ADDR, \
 ##                  POS1_ADDR, POS2_ADDR, VEL1_ADDR, VEL2_ADDR, ACC_ADDR]
-DATA_OUT_ADDR = [EMG2_ADDR, TRQ1_ADDR, TRQ2_ADDR, ACC_ADDR, \
-                 VEL1_ADDR, VEL2_ADDR, POS1_ADDR, POS2_ADDR]
+DATA_OUT_ADDR = [EMG1_ADDR, EMG2_ADDR, TRQ2_ADDR, ACC_ADDR, \
+                 VEL1_ADDR, POS1_ADDR]
+OUT_TAG = ("EMG.F", "EMG.E", "Torque", "Acc", "Vel", "Pos")
 ZERO_DATA = [0.0 for ix in xrange(NUM_CHANNEL)]
 
 class Model:
@@ -132,7 +133,8 @@ class Model:
         outValLo = self.xem.GetWireOutValue(getAddr) & 0xffff # length = 16-bit
         outValHi = self.xem.GetWireOutValue(getAddr + 0x01) & 0xffff
         outVal = ((outValHi << 16) + outValLo) & 0xFFFFFFFF
-        if getAddr == EMG2_ADDR:
+        if (getAddr == EMG1_ADDR) | (getAddr == EMG2_ADDR):
+        ##if getAddr == (EMG1_ADDR):
             outVal = ConvertType(outVal, 'I', 'i')
         ## elif getAddr == UNDERFLOW_ADDR:
         ##     outVal = ConvertType(outVal, 'I', 'i')
@@ -161,11 +163,17 @@ class Model:
             self.xem.ActivateTriggerIn(0x50, DATA_EVT_IA)
         elif trigEvent == DATA_EVT_M1:
             ##bitVal = newVal << 2
-            bitVal = newVal
-            self.xem.SetWireInValue(0x01, 0 >> 0, 0xffff)
-            self.xem.SetWireInValue(0x02, 0 >> 16, 0xffff)
-            self.xem.SetWireInValue(0x03, bitVal >> 0, 0xffff)
-            self.xem.SetWireInValue(0x04, bitVal >> 16, 0xffff)
+            bitVal = abs(newVal)
+            if newVal < 0:
+                self.xem.SetWireInValue(0x01, bitVal >> 0, 0xffff)
+                self.xem.SetWireInValue(0x02, bitVal >> 16, 0xffff)
+                self.xem.SetWireInValue(0x03, 0 >> 0, 0xffff)
+                self.xem.SetWireInValue(0x04, 0  >> 16, 0xffff)
+            else:
+                self.xem.SetWireInValue(0x01, 0 >> 0, 0xffff)
+                self.xem.SetWireInValue(0x02, 0  >> 16, 0xffff)
+                self.xem.SetWireInValue(0x03, bitVal >> 0, 0xffff)
+                self.xem.SetWireInValue(0x04, bitVal  >> 16, 0xffff)
             self.xem.UpdateWireIns()
             self.xem.ActivateTriggerIn(0x50, DATA_EVT_M1)
         elif trigEvent == 2:
@@ -268,26 +276,12 @@ class View(wx.Frame):
 
         self.dispRect = self.GetClientRect()
         winScale = self.dispRect.GetHeight() * 4 / 5
-        self.dc.DrawText("Pos", 1, winScale / 5)
-        self.dc.DrawText("Vel", 0, winScale / 5)
-        self.dc.DrawText("Flex", 0, 2*winScale / 5)
-        self.dc.DrawText("Ext", 0, 3*winScale / 5)
-
-        self.dc.DrawText("S1.f", 0, winScale - 126)
-        self.dc.DrawText("M1.f", 0, winScale - 94)
-        self.dc.DrawText("alpha.f", 0, winScale - 62)
-        self.dc.DrawText("Ia.f", 0, winScale - 30)
-
-        self.dc.DrawText("S1.e", 0, winScale + 2)
-        self.dc.DrawText("M1.e", 0, winScale + 34)
-        self.dc.DrawText("alpha.e", 0, winScale + 66)
-        self.dc.DrawText("Ia.e", 0, winScale + 98)
-
-        self.dispRect = self.GetClientRect()
-        winScale = self.dispRect.GetHeight() * 4 / 5
-        if self.xPos == 0:
-            self.dc.Clear()
         self.dc.SetPen(wx.Pen('blue', 1))
+
+        if self.xPos <= 1:
+            self.dc.Clear()
+            for ix in xrange(NUM_CHANNEL):
+                self.dc.DrawText(OUT_TAG[ix], 20, winScale / 8 *(1 + ix) - 10 )
 
         for ix in xrange(NUM_CHANNEL):
             self.dc.DrawLine(self.xPos + 60, winScale / 8 *(1 + ix) -
@@ -299,36 +293,38 @@ class View(wx.Frame):
         if self.xPos > 600:
             self.xPos = 0
 
+        spikeSeq = unpack("%d" % len(newSpike) + "b", newSpike)
+
         ## display the spike rasters
-        for i in xrange(0, 4096, 2):
-            neuronID = newSpike[i+1];
-            rawspikes = newSpike[i];
+        for i in xrange(0, len(spikeSeq), 2):
+            neuronID = spikeSeq[i+1]
+            rawspikes = spikeSeq[i]
             ## flexors
-            ## if (rawspikes & 32): ## S1
-            ##     self.dc.DrawLine(self.xPos,(winScale) - 96 - int(neuronID/4),\
-            ##                      self.xPos+4, (winScale) - 96 - int(neuronID/4))
-            if (rawspikes & 0x10) : ## M1
-                self.dc.DrawLine(self.xPos,(winScale) - 64 - int(neuronID/4),\
-                                 self.xPos+4, (winScale) - 64 - int(neuronID/4))
-            ## if (rawspikes & 64) : ## MN
-            ##     self.dc.DrawLine(self.xPos,(winScale) - 32 - int(neuronID/4),\
-            ##                      self.xPos+4, (winScale) - 32 - int(neuronID/4))
-            ## if (rawspikes & 128) : ## Ia
-            ##     self.dc.DrawLine(self.xPos,(winScale) - int(neuronID/4),\
-            ##                      self.xPos+4, (winScale) - int(neuronID/4))
+            if (rawspikes & 32): ## S1
+                self.dc.DrawLine(self.xPos+60,(winScale) - 36 - (neuronID/4),\
+                                 self.xPos+62, (winScale) - 36 - (neuronID/4))
+            if (rawspikes & 16) : ## M1
+                self.dc.DrawLine(self.xPos+60,(winScale) - 32 - (neuronID/4),\
+                                 self.xPos+62, (winScale) - 32 - (neuronID/4))
+            if (rawspikes & 64) : ## MN
+                self.dc.DrawLine(self.xPos+60,(winScale) - 28 - (neuronID/4),\
+                                 self.xPos+62, (winScale) -  28 - (neuronID/4))
+            if (rawspikes & 128) : ## Ia
+                self.dc.DrawLine(self.xPos+60,(winScale) - 24 - (neuronID/4),\
+                                 self.xPos+62, (winScale) - 24 - (neuronID/4))
             ## ## extensors16
-            ## if (rawspikes & 2) : ## S1
-            ##     self.dc.DrawLine(self.xPos,(winScale) + 32 - int(neuronID/4),\
-            ##                      self.xPos+4, (winScale) +32 - int(neuronID/4))
-            ## if (rawspikes & 1) : ## M1
-            ##     self.dc.DrawLine(self.xPos,(winScale) + 64 - int(neuronID/4),\
-            ##                      self.xPos+4, (winScale) + 64 - int(neuronID/4))
-            ## if (rawspikes & 4) : ## MN
-            ##     self.dc.DrawLine(self.xPos,(winScale) + 96 - int(neuronID/4),\
-            ##                      self.xPos+4, (winScale) +96 - int(neuronID/4))
-            ## if (rawspikes & 8) : ## Ia
-            ##     self.dc.DrawLine(self.xPos,(winScale) + 128 - int(neuronID/4),\
-            ##                      self.xPos+4, (winScale) + 128- int(neuronID/4))
+            if (rawspikes & 2) : ## S1
+                self.dc.DrawLine(self.xPos+60,(winScale) + 0 - (neuronID/4),\
+                                 self.xPos+62, (winScale) +0 - (neuronID/4))
+            if (rawspikes & 1) : ## M1
+                self.dc.DrawLine(self.xPos+60,(winScale) + 4 - (neuronID/4),\
+                                 self.xPos+62, (winScale) + 4 - (neuronID/4))
+            if (rawspikes & 4) : ## MN
+                self.dc.DrawLine(self.xPos+60,(winScale) + 8 - (neuronID/4),\
+                                 self.xPos+62, (winScale) +8 - (neuronID/4))
+            if (rawspikes & 8) : ## Ia
+                self.dc.DrawLine(self.xPos+60,(winScale) + 12 - (neuronID/4),\
+                                 self.xPos+62, (winScale) + 12- (neuronID/4))
 
 
 class BoundControlBox(wx.Panel):
@@ -390,29 +386,29 @@ class ChangerView(wx.Frame):
         ## sizer.Add(self.remove, 0, wx.EXPAND | wx.ALL)
         ## self.SetSizer(sizer)
 
-        self.slider1 = wx.Slider(self.panel, -1, 0, 0, 100, (10, 10), (250, 50),
+        self.slider1 = wx.Slider(self.panel, -1, 50, 0, 100, (10, 10), (250, 50),
                                   wx.SL_HORIZONTAL | wx.SL_AUTOTICKS | wx.SL_LABELS)
-        self.slider2 = wx.Slider(self.panel, -1, 50, 0, 100, (10, 10), (250, 50),
+        self.slider2 = wx.Slider(self.panel, -1, 0, 0, 100, (10, 10), (250, 50),
                                   wx.SL_HORIZONTAL | wx.SL_AUTOTICKS | wx.SL_LABELS)
         self.slider3 = wx.Slider(self.panel, -1, 0, 0, 100, (10, 10), (250, 50),
                                   wx.SL_HORIZONTAL | wx.SL_AUTOTICKS | wx.SL_LABELS)
-        self.slider4 = wx.Slider(self.panel, -1, 0, 0, 100, (10, 10), (250, 50),
-                                  wx.SL_HORIZONTAL | wx.SL_AUTOTICKS | wx.SL_LABELS)
-        self.slider5 = wx.Slider(self.panel, -1, 0, 0, 100, (10, 10), (250, 50),
-                                  wx.SL_HORIZONTAL | wx.SL_AUTOTICKS | wx.SL_LABELS)
-        self.slider6 = wx.Slider(self.panel, -1, 0, 0, 100, (10, 10), (250, 50),
-                                  wx.SL_HORIZONTAL | wx.SL_AUTOTICKS | wx.SL_LABELS)
+        ## self.slider4 = wx.Slider(self.panel, -1, 0, 0, 100, (10, 10), (250, 50),
+        ##                           wx.SL_HORIZONTAL | wx.SL_AUTOTICKS | wx.SL_LABELS)
+        ## self.slider5 = wx.Slider(self.panel, -1, 0, 0, 100, (10, 10), (250, 50),
+        ##                           wx.SL_HORIZONTAL | wx.SL_AUTOTICKS | wx.SL_LABELS)
+        ## self.slider6 = wx.Slider(self.panel, -1, 0, 0, 100, (10, 10), (250, 50),
+        ##                           wx.SL_HORIZONTAL | wx.SL_AUTOTICKS | wx.SL_LABELS)
         self.slider7 = wx.Slider(self.panel, -1, 0, 0, 100, (10, 10), (250, 50),
                                   wx.SL_HORIZONTAL | wx.SL_AUTOTICKS | wx.SL_LABELS)
         self.slider8 = wx.Slider(self.panel, -1, 50, 0, 100, (10, 10), (250, 50),
                                   wx.SL_HORIZONTAL | wx.SL_AUTOTICKS | wx.SL_LABELS)
 
-        self.label1 = wx.StaticText(self.panel, -1, "Ia_bias")
-        self.label2 = wx.StaticText(self.panel, -1, "M1")
-        self.label3 = wx.StaticText(self.panel, -1, "LLR")
-        self.label4 = wx.StaticText(self.panel, -1, "Pos")
-        self.label5 = wx.StaticText(self.panel, -1, "Vel")
-        self.label6 = wx.StaticText(self.panel, -1, "Gamma")
+        self.label1 = wx.StaticText(self.panel, -1, "No Cocontraction")
+        self.label2 = wx.StaticText(self.panel, -1, "M1 Biceps")
+        self.label3 = wx.StaticText(self.panel, -1, "M1 Triceps")
+        ## self.label4 = wx.StaticText(self.panel, -1, "Pos")
+        ## self.label5 = wx.StaticText(self.panel, -1, "Vel")
+        ## self.label6 = wx.StaticText(self.panel, -1, "Gamma")
         self.label7 = wx.StaticText(self.panel, -1, "ClockRate")
         self.label8 = wx.StaticText(self.panel, -1, "ExtTrq")
 #        self.label1.SetBackgroundColour((self.Red1, self.Green1, self.Blue1))
@@ -424,12 +420,12 @@ class ChangerView(wx.Frame):
         self.hbox.Add(self.label2,flag=wx.ALIGN_CENTER, border=5)
         self.hbox.Add(self.slider3, border=5, flag=wx.ALL|wx.EXPAND)
         self.hbox.Add(self.label3,flag=wx.ALIGN_CENTER, border=5)
-        self.hbox.Add(self.slider4, border=5, flag=wx.ALL|wx.EXPAND)
-        self.hbox.Add(self.label4,flag=wx.ALIGN_CENTER, border=5)
-        self.hbox.Add(self.slider5, border=5, flag=wx.ALL|wx.EXPAND)
-        self.hbox.Add(self.label5,flag=wx.ALIGN_CENTER, border=5)
-        self.hbox.Add(self.slider6, border=5, flag=wx.ALL|wx.EXPAND)
-        self.hbox.Add(self.label6,flag=wx.ALIGN_CENTER, border=5)
+        ## self.hbox.Add(self.slider4, border=5, flag=wx.ALL|wx.EXPAND)
+        ## self.hbox.Add(self.label4,flag=wx.ALIGN_CENTER, border=5)
+        ## self.hbox.Add(self.slider5, border=5, flag=wx.ALL|wx.EXPAND)
+        ## self.hbox.Add(self.label5,flag=wx.ALIGN_CENTER, border=5)
+        ## self.hbox.Add(self.slider6, border=5, flag=wx.ALL|wx.EXPAND)
+        ## self.hbox.Add(self.label6,flag=wx.ALIGN_CENTER, border=5)
         self.hbox.Add(self.slider7, border=5, flag=wx.ALL|wx.EXPAND)
         self.hbox.Add(self.label7,flag=wx.ALIGN_CENTER, border=5)
         self.hbox.Add(self.slider8, border=5, flag=wx.ALL|wx.EXPAND)
@@ -452,9 +448,9 @@ class Controller:
         ## self.ctrlView.add.Bind(wx.EVT_BUTTON, self.AddMoney)
         ## self.ctrlView.remove.Bind(wx.EVT_BUTTON, self.RemoveMoney)
 
-        ## self.ctrlView.slider1.Bind(wx.EVT_SLIDER, self.UpdateIa)
-        self.ctrlView.slider2.Bind(wx.EVT_SLIDER, self.SendMI)
-        ## self.ctrlView.slider3.Bind(wx.EVT_SLIDER, self.UpdateLLR)
+        self.ctrlView.slider1.Bind(wx.EVT_SLIDER, self.SendM1Single)
+        self.ctrlView.slider2.Bind(wx.EVT_SLIDER, self.SendM1Biceps)
+        self.ctrlView.slider3.Bind(wx.EVT_SLIDER, self.SendM1Triceps)
         ## self.ctrlView.slider4.Bind(wx.EVT_SLIDER, self.UpdatePos1)
         ## self.ctrlView.slider5.Bind(wx.EVT_SLIDER, self.UpdateVel1)
         ## self.ctrlView.slider6.Bind(wx.EVT_SLIDER, self.UpdateGamma)
@@ -473,8 +469,16 @@ class Controller:
     ##     self.fpgaData.xem.UpdateWireIns()
     ##     self.fpgaData.xem.ActivateTriggerIn(0x50, 0)
 
-    def SendMI(self, event):
-        newMI = 2048 * self.ctrlView.slider2.GetValue() / 100
+    def SendM1Single(self, event):
+        newMI = 2048 * (self.ctrlView.slider1.GetValue() - 50) / 50
+        self.nerfModel.SendPara(newMI, DATA_EVT_M1)
+
+    def SendM1Biceps(self, event):
+        newMI = -2048 * self.ctrlView.slider2.GetValue() / 100
+        self.nerfModel.SendPara(newMI, DATA_EVT_M1)
+
+    def SendM1Triceps(self, event):
+        newMI = 2048 * self.ctrlView.slider3.GetValue() / 100
         self.nerfModel.SendPara(newMI, DATA_EVT_M1)
 
     def SendClkRate(self, event):
@@ -496,13 +500,21 @@ class Controller:
         """
         ## self.dispView.SetMoney(message.data)
         newVal = [0.0 for ix in range(NUM_CHANNEL)]
-        for i in xrange(NUM_CHANNEL):
+        ##for i in xrange(NUM_CHANNEL):
+        for i in xrange(2):
             newVal[i] = self.nerfModel.ReadFPGA(DATA_OUT_ADDR[i])
+        newVal[2] = self.nerfModel.ReadFPGA(TRQ2_ADDR) -\
+                    self.nerfModel.ReadFPGA(TRQ1_ADDR)
+        newVal[3] = self.nerfModel.ReadFPGA(ACC_ADDR)
+        newVal[4] = self.nerfModel.ReadFPGA(VEL1_ADDR) -\
+                    self.nerfModel.ReadFPGA(VEL2_ADDR)
+        newVal[5] = self.nerfModel.ReadFPGA(POS1_ADDR) -\
+                    self.nerfModel.ReadFPGA(POS2_ADDR)
 ##            newVal[i] = self.nerfModel.ReadFPGA16Bit(0x23)
 #            hi = ConvertType(hi, 'i', 'h')
         newSpike = self.nerfModel.ReadPipe()
-        self.dispView.OnPaint(newVal = newVal)
-        ## self.dispView.OnPaint(newVal = newVal, newSpike = newSpike)
+        ## self.dispView.OnPaint(newVal = newVal)
+        self.dispView.OnPaint(newVal = newVal, newSpike = newSpike)
 
 def ConvertType(val, fromType, toType):
     return unpack(toType, pack(fromType, val))[0]
