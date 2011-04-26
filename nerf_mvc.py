@@ -151,7 +151,7 @@ class Model:
             ## outVal = -(~(outVal - 0x1) & 0xFF)
         return outVal
 
-    def SendPara(self, newVal, trigEvent):
+    def SendPara(self, newVal, trigEvent, newVal2 = 0):
         if trigEvent == DATA_EVT_IA:
             bitVal = ConvertType(newVal, fromType = 'f', toType = 'i')
             bitVal = bitVal << 2
@@ -163,17 +163,11 @@ class Model:
             self.xem.ActivateTriggerIn(0x50, DATA_EVT_IA)
         elif trigEvent == DATA_EVT_M1:
             ##bitVal = newVal << 2
-            bitVal = abs(newVal)
-            if newVal < 0:
-                self.xem.SetWireInValue(0x01, bitVal >> 0, 0xffff)
-                self.xem.SetWireInValue(0x02, bitVal >> 16, 0xffff)
-                self.xem.SetWireInValue(0x03, 0 >> 0, 0xffff)
-                self.xem.SetWireInValue(0x04, 0  >> 16, 0xffff)
-            else:
-                self.xem.SetWireInValue(0x01, 0 >> 0, 0xffff)
-                self.xem.SetWireInValue(0x02, 0  >> 16, 0xffff)
-                self.xem.SetWireInValue(0x03, bitVal >> 0, 0xffff)
-                self.xem.SetWireInValue(0x04, bitVal  >> 16, 0xffff)
+            ##bitVal = abs(newVal)
+            self.xem.SetWireInValue(0x01, abs(newVal) >> 0, 0xffff)
+            self.xem.SetWireInValue(0x02, abs(newVal) >> 16, 0xffff)
+            self.xem.SetWireInValue(0x03, abs(newVal2) >> 0, 0xffff)
+            self.xem.SetWireInValue(0x04, abs(newVal2)  >> 16, 0xffff)
             self.xem.UpdateWireIns()
             self.xem.ActivateTriggerIn(0x50, DATA_EVT_M1)
         elif trigEvent == 2:
@@ -471,15 +465,20 @@ class Controller:
 
     def SendM1Single(self, event):
         newMI = 2048 * (self.ctrlView.slider1.GetValue() - 50) / 50
-        self.nerfModel.SendPara(newMI, DATA_EVT_M1)
+        if newMI > 0:
+            self.nerfModel.SendPara(0, DATA_EVT_M1, newMI)
+        else:
+            self.nerfModel.SendPara(newMI, DATA_EVT_M1, 0)
 
     def SendM1Biceps(self, event):
-        newMI = -2048 * self.ctrlView.slider2.GetValue() / 100
-        self.nerfModel.SendPara(newMI, DATA_EVT_M1)
+        newM1Biceps = -2048 * self.ctrlView.slider2.GetValue() / 100
+        newM1Triceps = 2048 * self.ctrlView.slider3.GetValue() / 100
+        self.nerfModel.SendPara(newM1Biceps, DATA_EVT_M1, newM1Triceps)
 
     def SendM1Triceps(self, event):
-        newMI = 2048 * self.ctrlView.slider3.GetValue() / 100
-        self.nerfModel.SendPara(newMI, DATA_EVT_M1)
+        newM1Biceps = -2048 * self.ctrlView.slider2.GetValue() / 100
+        newM1Triceps = 2048 * self.ctrlView.slider3.GetValue() / 100
+        self.nerfModel.SendPara(newM1Biceps, DATA_EVT_M1, newM1Triceps)
 
     def SendClkRate(self, event):
         newClkRate = self.ctrlView.slider7.GetValue() / 5 + 1
@@ -508,8 +507,7 @@ class Controller:
         newVal[3] = self.nerfModel.ReadFPGA(ACC_ADDR)
         newVal[4] = self.nerfModel.ReadFPGA(VEL1_ADDR) -\
                     self.nerfModel.ReadFPGA(VEL2_ADDR)
-        newVal[5] = self.nerfModel.ReadFPGA(POS1_ADDR) -\
-                    self.nerfModel.ReadFPGA(POS2_ADDR)
+        newVal[5] = self.nerfModel.ReadFPGA(POS1_ADDR)
 ##            newVal[i] = self.nerfModel.ReadFPGA16Bit(0x23)
 #            hi = ConvertType(hi, 'i', 'h')
         newSpike = self.nerfModel.ReadPipe()
