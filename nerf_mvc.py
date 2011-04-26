@@ -52,6 +52,7 @@ DISPLAY_SCALING = [0.1, 500, 500, 10, 10, 10, 5, 5]
 ##                  POS1_ADDR, POS2_ADDR, VEL1_ADDR, VEL2_ADDR, ACC_ADDR]
 DATA_OUT_ADDR = [EMG2_ADDR, TRQ1_ADDR, TRQ2_ADDR, ACC_ADDR, \
                  VEL1_ADDR, VEL2_ADDR, POS1_ADDR, POS2_ADDR]
+OUT_TAG = ("Pos", "Pos", "Pos", "Pos", "Pos", "Pos", "Pos", "Pos")
 ZERO_DATA = [0.0 for ix in xrange(NUM_CHANNEL)]
 
 class Model:
@@ -115,13 +116,6 @@ class Model:
         self.xem.SetWireInValue(0x02, self.gamma_minus, 0xffff)  ## set the software delay
         self.xem.UpdateWireIns()
         self.xem.ActivateTriggerIn(0x50, 9)  ## tell the chip there is new data
-
-    def ReadPipe(self):
-        buf = "\x00"*4100
-        self.xem.ReadFromPipeOut(0xA1, buf)
-        ## 'buf' becomes a string buffer which is used to contain the data read from the pipeout. In both the Write and Read cases, the length of the buffer passed is the length transferred. 
-        return buf
-
 
     def ReadFPGA(self, getAddr):
 
@@ -259,8 +253,7 @@ class View(wx.Frame):
         label = "Resume" if self.paused else "Pause"
         self.pause_button.SetLabel(label)
 
-    def OnPaint(self, event = None, newVal = ZERO_DATA, newSpike = ""):
-
+    def OnPaint(self, event = None, newVal = ZERO_DATA):
         """ aksjdf
         """
         if ~hasattr(self, 'dc'):
@@ -268,26 +261,12 @@ class View(wx.Frame):
 
         self.dispRect = self.GetClientRect()
         winScale = self.dispRect.GetHeight() * 4 / 5
-        self.dc.DrawText("Pos", 1, winScale / 5)
-        self.dc.DrawText("Vel", 0, winScale / 5)
-        self.dc.DrawText("Flex", 0, 2*winScale / 5)
-        self.dc.DrawText("Ext", 0, 3*winScale / 5)
-
-        self.dc.DrawText("S1.f", 0, winScale - 126)
-        self.dc.DrawText("M1.f", 0, winScale - 94)
-        self.dc.DrawText("alpha.f", 0, winScale - 62)
-        self.dc.DrawText("Ia.f", 0, winScale - 30)
-
-        self.dc.DrawText("S1.e", 0, winScale + 2)
-        self.dc.DrawText("M1.e", 0, winScale + 34)
-        self.dc.DrawText("alpha.e", 0, winScale + 66)
-        self.dc.DrawText("Ia.e", 0, winScale + 98)
-
-        self.dispRect = self.GetClientRect()
-        winScale = self.dispRect.GetHeight() * 4 / 5
-        if self.xPos == 0:
-            self.dc.Clear()
         self.dc.SetPen(wx.Pen('blue', 1))
+
+        if self.xPos <= 1:
+            self.dc.Clear()
+            for ix in xrange(NUM_CHANNEL):
+                self.dc.DrawText(OUT_TAG[ix], 20, winScale / 8 *(1 + ix) - 10 )
 
         for ix in xrange(NUM_CHANNEL):
             self.dc.DrawLine(self.xPos + 60, winScale / 8 *(1 + ix) -
@@ -296,39 +275,29 @@ class View(wx.Frame):
                         newVal[ix] * DISPLAY_SCALING[ix])
         self.data = newVal
         self.xPos += 1
-        if self.xPos > 600:
+        if self.xPos > 300:
             self.xPos = 0
 
-        ## display the spike rasters
-        for i in xrange(0, 4096, 2):
-            neuronID = newSpike[i+1];
-            rawspikes = newSpike[i];
-            ## flexors
-            ## if (rawspikes & 32): ## S1
-            ##     self.dc.DrawLine(self.xPos,(winScale) - 96 - int(neuronID/4),\
-            ##                      self.xPos+4, (winScale) - 96 - int(neuronID/4))
-            if (rawspikes & 0x10) : ## M1
-                self.dc.DrawLine(self.xPos,(winScale) - 64 - int(neuronID/4),\
-                                 self.xPos+4, (winScale) - 64 - int(neuronID/4))
-            ## if (rawspikes & 64) : ## MN
-            ##     self.dc.DrawLine(self.xPos,(winScale) - 32 - int(neuronID/4),\
-            ##                      self.xPos+4, (winScale) - 32 - int(neuronID/4))
-            ## if (rawspikes & 128) : ## Ia
-            ##     self.dc.DrawLine(self.xPos,(winScale) - int(neuronID/4),\
-            ##                      self.xPos+4, (winScale) - int(neuronID/4))
-            ## ## extensors16
-            ## if (rawspikes & 2) : ## S1
-            ##     self.dc.DrawLine(self.xPos,(winScale) + 32 - int(neuronID/4),\
-            ##                      self.xPos+4, (winScale) +32 - int(neuronID/4))
-            ## if (rawspikes & 1) : ## M1
-            ##     self.dc.DrawLine(self.xPos,(winScale) + 64 - int(neuronID/4),\
-            ##                      self.xPos+4, (winScale) + 64 - int(neuronID/4))
-            ## if (rawspikes & 4) : ## MN
-            ##     self.dc.DrawLine(self.xPos,(winScale) + 96 - int(neuronID/4),\
-            ##                      self.xPos+4, (winScale) +96 - int(neuronID/4))
-            ## if (rawspikes & 8) : ## Ia
-            ##     self.dc.DrawLine(self.xPos,(winScale) + 128 - int(neuronID/4),\
-            ##                      self.xPos+4, (winScale) + 128- int(neuronID/4))
+
+    ## def DrawPlot(self, newVal):
+    ##     """ Redraws the plot
+    ##     """
+    ##     ##dc = wx.PaintDC(self.panel)
+    ##     self.dispRect = self.GetClientRect()
+    ##     winScale = self.dispRect.GetHeight() * 4 / 5
+    ##     if self.xPos == 0:
+    ##         self.dc.Clear()
+    ##     self.dc.SetPen(wx.Pen('blue', 1))
+
+    ##     for ix in xrange(NUM_CHANNEL):
+    ##         self.dc.DrawLine(self.xPos + 60, winScale / 8 *(1 + ix) -
+    ##                     self.data[ix] * DISPLAY_SCALING[ix],\
+    ##                     self.xPos + 61, winScale / 8 *(1 + ix) -
+    ##                     newVal[ix] * DISPLAY_SCALING[ix])
+    ##     self.data = newVal
+    ##     self.xPos += 1
+    ##     if self.xPos > 300:
+    ##         self.xPos = 0
 
 
 class BoundControlBox(wx.Panel):
@@ -344,8 +313,10 @@ class BoundControlBox(wx.Panel):
         box = wx.StaticBox(self, -1, label)
         sizer = wx.StaticBoxSizer(box, wx.VERTICAL)
         
-        self.radio_auto = wx.RadioButton(self, -1, label="Auto", style=wx.RB_GROUP)
-        self.radio_manual = wx.RadioButton(self, -1, label="Manual")
+        self.radio_auto = wx.RadioButton(self, -1, 
+            label="Auto", style=wx.RB_GROUP)
+        self.radio_manual = wx.RadioButton(self, -1,
+            label="Manual")
         self.manual_text = wx.TextCtrl(self, -1, 
             size=(35,-1),
             value=str(initval),
@@ -500,9 +471,7 @@ class Controller:
             newVal[i] = self.nerfModel.ReadFPGA(DATA_OUT_ADDR[i])
 ##            newVal[i] = self.nerfModel.ReadFPGA16Bit(0x23)
 #            hi = ConvertType(hi, 'i', 'h')
-        newSpike = self.nerfModel.ReadPipe()
         self.dispView.OnPaint(newVal = newVal)
-        ## self.dispView.OnPaint(newVal = newVal, newSpike = newSpike)
 
 def ConvertType(val, fromType, toType):
     return unpack(toType, pack(fromType, val))[0]
