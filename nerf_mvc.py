@@ -27,7 +27,6 @@ import OpalKelly.ok as ok
 ##     FigureCanvasWxAgg as FigCanvas, \
 ##     NavigationToolbar2WxAgg as NavigationToolbar
 import numpy as np
-import pylab
 
 VIEWER_REFRESH_RATE = 40 # in ms
 NUM_CHANNEL = 6 # Number of channels

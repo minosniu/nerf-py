@@ -15,11 +15,10 @@ import random
 import sys
 import wx
 import wx.lib.plot as plot
-import math
 import thread, time
 from struct import pack, unpack
 from wx.lib.pubsub import Publisher as pub
-import OpalKelly.ok as ok
+import opalkelly_4_0_3.ok as ok
 
 # The recommended way to use wx with mpl is with the WXAgg backend.
 #
@@ -30,10 +29,10 @@ import OpalKelly.ok as ok
 ##     FigureCanvasWxAgg as FigCanvas, \
 ##     NavigationToolbar2WxAgg as NavigationToolbar
 import numpy as np
-import pylab
 
-VIEWER_REFRESH_RATE = 10 # in ms
-CSS_ADDR = 0x20 
+VIEWER_REFRESH_RATE = 40 # in ms
+NUM_CHANNEL = 2 # Number of channels
+IA1_ADDR = 0x20 
 II1_ADDR = 0x22 
 VAR2_ADDR = 0x24 
 VAR3_ADDR = 0x26 
@@ -42,12 +41,20 @@ VAR5_ADDR = 0x2A
 VAR6_ADDR = 0x30 
 VAR7_ADDR = 0x32 
 
-DATA_EVT_X = 0
+DATA_EVT_IA = 0
+DATA_EVT_M1 = 1
+DATA_EVT_POS_FLEX = 3
+DATA_EVT_VEL_FLEX = 4
+DATA_EVT_GAMMA_STA = 5
+DATA_EVT_GAMMA_DYN = 6
 DATA_EVT_CLKRATE = 7
+DATA_EVT_TRQ = 10
 ##DISPLAY_SCALING = [0.1, 500, 500, 10, 10, 10, 5, 5]
-NUM_CHANNEL = 1 # Number of channels
-DISPLAY_SCALING = [1.0]
-DATA_OUT_ADDR = [CSS_ADDR, II1_ADDR, VAR2_ADDR, VAR3_ADDR, \
+DISPLAY_SCALING = [0.001, 0.00001, 10, 0.0000, 0.0001, 0, 0.000, 0.001]
+##DISPLAY_SCALING = [0, 0.01, 0, 5, 5, 3, 3, 0.5]
+## DATA_OUT_ADDR = [EMG2_ADDR, TRQ1_ADDR, TRQ2_ADDR, \
+##                  POS1_ADDR, POS2_ADDR, VEL1_ADDR, VEL2_ADDR, ACC_ADDR]
+DATA_OUT_ADDR = [IA1_ADDR, II1_ADDR, VAR2_ADDR, VAR3_ADDR, \
                  VAR4_ADDR, VAR5_ADDR, VAR6_ADDR, VAR7_ADDR]
 ZERO_DATA = [0.0 for ix in xrange(NUM_CHANNEL)]
 
@@ -69,8 +76,8 @@ class Model:
         # process the data.
         ## if (dlg.ShowModal() == wx.ID_OK):
         ##     bitfile = dlg.GetPath()
-        defaultDir="../local/projects/rsqrt_test/"
-        defaultFile="rsqrt_tester.bit"
+        defaultDir="../local/projects/fp_spindle_test/"
+        defaultFile="fp_spindle_test.bit"
         ## defaultFile="counters_fp_muscle.bit"
 
         bitfile = defaultDir + defaultFile
@@ -87,7 +94,7 @@ class Model:
         self.baseRate = 100
         self.pll.SetPLLParameters(0, self.baseRate, 48,  True)            #multiply up to 400mhz
         self.pll.SetOutputSource(0, ok.PLL22393.ClkSrc_PLL0_0)  #clk1 
-        self.clkRate = 100                                #mhz; 200 is fastest
+        self.clkRate = 20                                #mhz; 200 is fastest
         self.pll.SetOutputDivider(0, self.baseRate / self.clkRate)        #div4 = 100mhz; div128 = 4mhz
         self.pll.SetOutputEnable(0, True)
         self.pll.SetOutputSource(1, ok.PLL22393.ClkSrc_PLL0_0)  #clk2
@@ -123,10 +130,10 @@ class Model:
         outValLo = self.xem.GetWireOutValue(getAddr) & 0xffff # length = 16-bit
         outValHi = self.xem.GetWireOutValue(getAddr + 0x01) & 0xffff
         outVal = ((outValHi << 16) + outValLo) & 0xFFFFFFFF
-        outVal = ConvertType(outVal, 'i', 'f')
+        outVal = ConvertType(outVal, 'I', 'f')
         ## if getAddr == DATA_OUT_ADDR[0]:
         ##     print "%2.4f" % outVal, 
-            ##print "%d" % (outValLo), 
+        ##     ##print "%d" % (outValLo), 
         
         ## Python default int is unsigned, use pack/unpack to
         ## convert into signed
@@ -145,19 +152,81 @@ class Model:
         self.xem.UpdateWireIns()
 
     def SendPara(self, newVal, trigEvent):
-        if trigEvent == DATA_EVT_X:
+        if trigEvent == DATA_EVT_IA:
+            bitVal = ConvertType(newVal, fromType = 'f', toType = 'i')
+            bitVal = bitVal << 2
+            self.xem.SetWireInValue(0x01, bitVal >> 0, 0xffff)
+            self.xem.SetWireInValue(0x02, bitVal >> 16, 0xffff)
+            self.xem.SetWireInValue(0x03, bitVal >> 0, 0xffff)
+            self.xem.SetWireInValue(0x04, bitVal >> 16, 0xffff)
+            self.xem.UpdateWireIns()
+            self.xem.ActivateTriggerIn(0x50, DATA_EVT_IA)
+        elif trigEvent == DATA_EVT_M1:
+            ##bitVal = newVal << 2
             bitVal = newVal
+            self.xem.SetWireInValue(0x01, 0 >> 0, 0xffff)
+            self.xem.SetWireInValue(0x02, 0 >> 16, 0xffff)
+            self.xem.SetWireInValue(0x03, bitVal >> 0, 0xffff)
+            self.xem.SetWireInValue(0x04, bitVal >> 16, 0xffff)
+            self.xem.UpdateWireIns()
+            self.xem.ActivateTriggerIn(0x50, DATA_EVT_M1)
+        elif trigEvent == DATA_EVT_POS_FLEX:
+            bitVal = ConvertType(newVal, fromType = 'f', toType = 'I')
             bitValLo = bitVal & 0xffff
             bitValHi = (bitVal >> 16) & 0xffff
-            self.xem.SetWireInValue(0x00, bitValLo, 0xffff)
-            self.xem.SetWireInValue(0x01, bitValHi, 0xffff)
+            self.xem.SetWireInValue(0x01, bitValLo, 0xffff)
+            self.xem.SetWireInValue(0x02, bitValHi, 0xffff)
+            self.xem.SetWireInValue(0x03, bitValLo, 0xffff)
+            self.xem.SetWireInValue(0x04, bitValHi, 0xffff)
             self.xem.UpdateWireIns()
-            ##self.xem.ActivateTriggerIn(0x50, DATA_EVT_X)
+            self.xem.ActivateTriggerIn(0x50, DATA_EVT_POS_FLEX)
+        elif trigEvent == DATA_EVT_VEL_FLEX:
+            bitVal = ConvertType(newVal, fromType = 'f', toType = 'I')
+            bitValLo = bitVal & 0xffff
+            bitValHi = (bitVal >> 16) & 0xffff
+            self.xem.SetWireInValue(0x01, bitValLo, 0xffff)
+            self.xem.SetWireInValue(0x02, bitValHi, 0xffff)
+            self.xem.SetWireInValue(0x03, bitValLo, 0xffff)
+            self.xem.SetWireInValue(0x04, bitValHi, 0xffff)
+            self.xem.UpdateWireIns()
+            self.xem.ActivateTriggerIn(0x50, DATA_EVT_VEL_FLEX)
+        elif trigEvent == DATA_EVT_GAMMA_STA:
+            bitVal = ConvertType(newVal, fromType = 'f', toType = 'I')
+            bitValLo = bitVal & 0xffff
+            bitValHi = (bitVal >> 16) & 0xffff
+            self.xem.SetWireInValue(0x01, bitValLo, 0xffff)
+            self.xem.SetWireInValue(0x02, bitValHi, 0xffff)
+            self.xem.UpdateWireIns()
+            self.xem.ActivateTriggerIn(0x50, DATA_EVT_GAMMA_STA)
+        elif trigEvent == DATA_EVT_GAMMA_DYN:
+            bitVal = ConvertType(newVal, fromType = 'f', toType = 'I')
+            bitValLo = bitVal & 0xffff
+            bitValHi = (bitVal >> 16) & 0xffff
+            self.xem.SetWireInValue(0x01, bitValLo, 0xffff)
+            self.xem.SetWireInValue(0x02, bitValHi, 0xffff)
+            self.xem.UpdateWireIns()
+            self.xem.ActivateTriggerIn(0x50, DATA_EVT_GAMMA_DYN)
         elif trigEvent == DATA_EVT_CLKRATE:
             self.pll.SetOutputDivider(0, newVal)        #div4 = 100 mhz
             self.pll.SetOutputDivider(1, newVal)        #div4 = 100 mhz
             self.xem.SetPLL22393Configuration(self.pll)
             self.xem.SetEepromPLL22393Configuration(self.pll)
+            ## self.xem.SetWireInValue(0x01, newVal, 0xffff)
+            ## self.xem.UpdateWireIns();
+            ## self.xem.ActivateTriggerIn(0x50, 7)
+        elif trigEvent == 8:
+            pass
+        elif trigEvent == 9:
+            pass
+        elif trigEvent == DATA_EVT_TRQ:
+            ## NOTE: here newVal should be a floating point number
+            bitVal = ConvertType(newVal, fromType = 'f', toType = 'I')
+            bitValLo = bitVal & 0xffff
+            bitValHi = (bitVal >> 16) & 0xffff
+            self.xem.SetWireInValue(0x01, bitValLo, 0xffff)
+            self.xem.SetWireInValue(0x02, bitValHi, 0xffff)
+            self.xem.UpdateWireIns()
+            self.xem.ActivateTriggerIn(0x50, DATA_EVT_TRQ)
 
 class View(wx.Frame):
     def __init__(self, parent):
@@ -341,16 +410,51 @@ class ChangerView(wx.Frame):
         ## sizer.Add(self.remove, 0, wx.EXPAND | wx.ALL)
         ## self.SetSizer(sizer)
 
-        self.sliderClk = wx.Slider(self.panel, -1, 50, 0, 100, (10, 10), (250, 50),
+        self.slider1 = wx.Slider(self.panel, -1, 0, 0, 100, (10, 10), (250, 50),
+                                  wx.SL_HORIZONTAL | wx.SL_AUTOTICKS | wx.SL_LABELS)
+        self.slider2 = wx.Slider(self.panel, -1, 50, 0, 100, (10, 10), (250, 50),
+                                  wx.SL_HORIZONTAL | wx.SL_AUTOTICKS | wx.SL_LABELS)
+        self.slider3 = wx.Slider(self.panel, -1, 0, 0, 100, (10, 10), (250, 50),
+                                  wx.SL_HORIZONTAL | wx.SL_AUTOTICKS | wx.SL_LABELS)
+        self.slider4 = wx.Slider(self.panel, -1, 50, 0, 100, (10, 10), (250, 50),
+                                  wx.SL_HORIZONTAL | wx.SL_AUTOTICKS | wx.SL_LABELS)
+        self.slider5 = wx.Slider(self.panel, -1, 0, 0, 100, (10, 10), (250, 50),
+                                  wx.SL_HORIZONTAL | wx.SL_AUTOTICKS | wx.SL_LABELS)
+        self.slider6 = wx.Slider(self.panel, -1, 0, 0, 100, (10, 10), (250, 50),
+                                  wx.SL_HORIZONTAL | wx.SL_AUTOTICKS | wx.SL_LABELS)
+        self.slider7 = wx.Slider(self.panel, -1, 0, 0, 100, (10, 10), (250, 50),
+                                  wx.SL_HORIZONTAL | wx.SL_AUTOTICKS | wx.SL_LABELS)
+        self.slider8 = wx.Slider(self.panel, -1, 50, 0, 100, (10, 10), (250, 50),
                                   wx.SL_HORIZONTAL | wx.SL_AUTOTICKS | wx.SL_LABELS)
         self.tglReset = wx.ToggleButton(self.panel, -1, "Reset", wx.Point(20,25), wx.Size(60,20))
 
-        self.labelClk = wx.StaticText(self.panel, -1, "ClockRate")
+        self.label1 = wx.StaticText(self.panel, -1, "Ia_bias")
+        self.label2 = wx.StaticText(self.panel, -1, "M1")
+        self.label3 = wx.StaticText(self.panel, -1, "Pos")
+        self.label4 = wx.StaticText(self.panel, -1, "Vel")
+        self.label5 = wx.StaticText(self.panel, -1, "GammaStatic")
+        self.label6 = wx.StaticText(self.panel, -1, "GammaDynamic")
+        self.label7 = wx.StaticText(self.panel, -1, "ClockRate")
+        self.label8 = wx.StaticText(self.panel, -1, "ExtTrq")
 #        self.label1.SetBackgroundColour((self.Red1, self.Green1, self.Blue1))
 
         self.hbox = wx.BoxSizer(wx.VERTICAL)
-        self.hbox.Add(self.sliderClk, border=5, flag=wx.ALL|wx.EXPAND)
-        self.hbox.Add(self.labelClk,flag=wx.ALIGN_CENTER, border=5)
+        self.hbox.Add(self.slider1, border=5, flag=wx.ALL|wx.EXPAND)
+        self.hbox.Add(self.label1,flag=wx.ALIGN_CENTER, border=5)
+        self.hbox.Add(self.slider2, border=5, flag=wx.ALL|wx.EXPAND)
+        self.hbox.Add(self.label2,flag=wx.ALIGN_CENTER, border=5)
+        self.hbox.Add(self.slider3, border=5, flag=wx.ALL|wx.EXPAND)
+        self.hbox.Add(self.label3,flag=wx.ALIGN_CENTER, border=5)
+        self.hbox.Add(self.slider4, border=5, flag=wx.ALL|wx.EXPAND)
+        self.hbox.Add(self.label4,flag=wx.ALIGN_CENTER, border=5)
+        self.hbox.Add(self.slider5, border=5, flag=wx.ALL|wx.EXPAND)
+        self.hbox.Add(self.label5,flag=wx.ALIGN_CENTER, border=5)
+        self.hbox.Add(self.slider6, border=5, flag=wx.ALL|wx.EXPAND)
+        self.hbox.Add(self.label6,flag=wx.ALIGN_CENTER, border=5)
+        self.hbox.Add(self.slider7, border=5, flag=wx.ALL|wx.EXPAND)
+        self.hbox.Add(self.label7,flag=wx.ALIGN_CENTER, border=5)
+        self.hbox.Add(self.slider8, border=5, flag=wx.ALL|wx.EXPAND)
+        self.hbox.Add(self.label8,flag=wx.ALIGN_CENTER, border=5)
 
         self.hbox.Add(self.tglReset, border=5, flag=wx.ALL|wx.EXPAND)
         self.hbox.Add(self.tglReset,flag=wx.ALIGN_CENTER, border=5)
@@ -364,52 +468,74 @@ class Controller:
         self.nerfModel = Model()
 
         #set up the first frame which displays the current Model value
-        ## self.dispView = View(None)
+        self.dispView = View(None)
+        ## thread.start_new_thread(self.nerfModel.ReadFPGA, ("Refreshing data", 0.05, 0x20))
+        ## self.dispView.SetMoney(self.nerfModel.myMoney)
 
         #set up the second frame which allows the user to modify the Model's value
-        ##self.ctrlView = ChangerView(self.dispView)
-        self.ctrlView = ChangerView(None)
-        self.ctrlView.sliderClk.Bind(wx.EVT_SLIDER, self.SendClkRate)
+        self.ctrlView = ChangerView(self.dispView)
+        ## self.ctrlView.add.Bind(wx.EVT_BUTTON, self.AddMoney)
+        ## self.ctrlView.remove.Bind(wx.EVT_BUTTON, self.RemoveMoney)
+
+        ## self.ctrlView.slider1.Bind(wx.EVT_SLIDER, self.UpdateIa)
+        self.ctrlView.slider2.Bind(wx.EVT_SLIDER, self.SendMI)
+        self.ctrlView.slider3.Bind(wx.EVT_SLIDER, self.SendPosFlex)
+        self.ctrlView.slider4.Bind(wx.EVT_SLIDER, self.SendVelFlex)
+        self.ctrlView.slider5.Bind(wx.EVT_SLIDER, self.SendGammaSta)
+        self.ctrlView.slider6.Bind(wx.EVT_SLIDER, self.SendGammaDyn)
+        self.ctrlView.slider7.Bind(wx.EVT_SLIDER, self.SendClkRate)
+        self.ctrlView.slider8.Bind(wx.EVT_SLIDER, self.SendExtTrq)
        ## self.ctrlView.tglReset.Bind(wx.EVT_TOGGLEBUTTON, self.OnReset)
         self.ctrlView.Bind(wx.EVT_TOGGLEBUTTON, self.OnReset, self.ctrlView.tglReset)
 
-        self.x = ConvertType(12.34, 'f', 'i') ## The input for css_term module
+        pub.subscribe(self.WantMoney, "WANT MONEY")
 
-        ##pub.subscribe(self.WantMoney, "WANT MONEY")
-
-        ## self.dispView.Show()
+        self.dispView.Show()
         self.ctrlView.Show()
+
+    ## def UpdateIa(self, event):
+    ##     newIa = 2048 * self.ctrlView.slider1.GetValue() / 100
+    ##     self.fpgaData.xem.SetWireInValue(0x01, self.Ia_bias, 0xffff)
+    ##     self.fpgaData.xem.SetWireInValue(0x02, self.Ia_bias, 0xffff)
+    ##     self.fpgaData.xem.UpdateWireIns()
+    ##     self.fpgaData.xem.ActivateTriggerIn(0x50, 0)
+
+    def SendMI(self, event):
+        newMI = 2048 * self.ctrlView.slider2.GetValue() / 100
+        self.nerfModel.SendPara(newMI, DATA_EVT_M1)
+
+    def SendPosFlex(self, event):
+        ## newExtTrq = (self.ctrlView.slider8.GetValue() - 50)
+        newPosFlex = 1.0 + (self.ctrlView.slider3.GetValue() - 50) / 10.0 
+        self.nerfModel.SendPara(newPosFlex, DATA_EVT_POS_FLEX)
+
+    def SendVelFlex(self, event):
+        ## newExtTrq = (self.ctrlView.slider8.GetValue() - 50)
+        newVelFlex = (self.ctrlView.slider4.GetValue() - 50) / 10.0 
+        self.nerfModel.SendPara(newVelFlex, DATA_EVT_VEL_FLEX)
+
+    def SendGammaSta(self, event):
+        ## newExtTrq = (self.ctrlView.slider8.GetValue() - 50)
+        newGammaSta = self.ctrlView.slider5.GetValue() 
+        self.nerfModel.SendPara(newGammaSta, DATA_EVT_GAMMA_STA)
+
+    def SendGammaDyn(self, event):
+        ## newExtTrq = (self.ctrlView.slider8.GetValue() - 50)
+        newGammaDyn = self.ctrlView.slider6.GetValue() * 5 
+        self.nerfModel.SendPara(newGammaDyn, DATA_EVT_GAMMA_DYN)
 
     def SendClkRate(self, event):
         newClkRate = self.ctrlView.slider7.GetValue() / 5 + 1
         self.nerfModel.SendPara(newClkRate, DATA_EVT_CLKRATE)
 
+    def SendExtTrq(self, event):
+        ## newExtTrq = (self.ctrlView.slider8.GetValue() - 50)
+        newExtTrq = (self.ctrlView.slider8.GetValue() - 50) * 0.1 
+        self.nerfModel.SendPara(newExtTrq, DATA_EVT_TRQ)
+
     def OnReset(self, evt):
         newReset = self.ctrlView.tglReset.GetValue()
         self.nerfModel.SendReset(newReset)
-        if newReset :
-            self.x = 0x00
-        else:
-            ix = ConvertType(12.34, 'f', 'I')
-            while ix < 0xffffffff:
-                self.nerfModel.SendPara(ix, DATA_EVT_X)
-                newVal = [0.0 for xx in range(NUM_CHANNEL)]
-                for i in xrange(NUM_CHANNEL):
-                    newVal[i] = self.nerfModel.ReadFPGA(DATA_OUT_ADDR[i])
-                    ## newVal[i] = ConvertType(self.x, 'I', 'f')
-                    real_x = ConvertType(ix, 'I', 'f')
-                    if real_x < 0.0:
-                        print "x = %.4f" % real_x
-                        continue
-                    real_fx = 1 / math.sqrt(real_x)
-                    err = abs(newVal[i] - real_fx)
-                    if err > 0.01:
-                        print "x = %.4f" % ConvertType(self.x, 'i', 'f'),
-                        print "rsqrt = %.4f" % newVal[i],
-                        print "pyrsq = %.4f" % (1 / math.sqrt(real_x)),
-                        print "err = %.4f" % (newVal[i] - 1 / math.sqrt(real_x))
-                ix += 0x10000
-            
 
 
     def WantMoney(self, message):
@@ -420,7 +546,13 @@ class Controller:
         We already know the topic is "WANT MONEY", but if we
         didn't, message.topic would tell us.
         """
-        ##self.dispView.OnPaint(newVal = newVal)
+        ## self.dispView.SetMoney(message.data)
+        newVal = [0.0 for ix in range(NUM_CHANNEL)]
+        for i in xrange(NUM_CHANNEL):
+            newVal[i] = self.nerfModel.ReadFPGA(DATA_OUT_ADDR[i])
+##            newVal[i] = self.nerfModel.ReadFPGA16Bit(0x23)
+#            hi = ConvertType(hi, 'i', 'h')
+        self.dispView.OnPaint(newVal = newVal)
 
 def ConvertType(val, fromType, toType):
     return unpack(toType, pack(fromType, val))[0]
