@@ -36,9 +36,10 @@ import opalkelly_4_0_3.ok as ok
 ##     NavigationToolbar2WxAgg as NavigationToolbar
 import numpy as np
 
-VIEWER_REFRESH_RATE = 11 # in ms, This the T for calculating digital freq
+VIEWER_REFRESH_RATE = 20 # in ms, This the T for calculating digital freq
 NUM_CHANNEL = 2 # Number of channels
 X_ADDR = 0x20 
+INT_X_ADDR = 0x22 
 ## II1_ADDR = 0x22 
 ## VAR2_ADDR = 0x24 
 ## VAR3_ADDR = 0x26 
@@ -47,14 +48,12 @@ X_ADDR = 0x20
 ## VAR6_ADDR = 0x30 
 ## VAR7_ADDR = 0x32 
 
-DATA_EVT_X = 4
 DATA_EVT_CLKRATE = 7
 ##DISPLAY_SCALING = [0.1, 500, 500, 10, 10, 10, 5, 5]
-DISPLAY_SCALING = [1000, 10]
-DATA_OUT_ADDR = [X_ADDR, X_ADDR]
+DISPLAY_SCALING = [10, 125.7] 
+DATA_OUT_ADDR = [X_ADDR, INT_X_ADDR]
 ZERO_DATA = [0.0 for ix in xrange(NUM_CHANNEL)]
-MAT_FILE = './testcase/sinwave.mat'
-BIT_FILE = "../clean_nerf/projects/integrator/integrator_xem3010.bit"
+BIT_FILE = "../clean_nerf/projects/autotester/autotester_xem3010.bit"
 
 class Model:
     """ Once each data point is refreshed, it publishes a message called "WANT MONEY"
@@ -85,18 +84,18 @@ class Model:
 
         self.xem.LoadDefaultPLLConfiguration()
 
-        ## self.pll = ok.PLL22393()
-        ## self.pll.SetReference(48.0)        #base clock frequency
-        ## self.baseRate = 100
-        ## self.pll.SetPLLParameters(0, self.baseRate, 48,  True)            #multiply up to 400mhz
-        ## self.pll.SetOutputSource(0, ok.PLL22393.ClkSrc_PLL0_0)  #clk1 
-        ## self.clkRate = 20                                #mhz; 200 is fastest
-        ## self.pll.SetOutputDivider(0, self.baseRate / self.clkRate)        #div4 = 100mhz; div128 = 4mhz
-        ## self.pll.SetOutputEnable(0, True)
+        self.pll = ok.PLL22393()
+        self.pll.SetReference(48)        #base clock frequency
+        self.baseRate = 1 #in MHz
+        self.pll.SetPLLParameters(0, self.baseRate, 48,  True)            #multiply up to baseRate 
+        self.pll.SetOutputSource(0, ok.PLL22393.ClkSrc_PLL0_0)  #clk1 
+        self.clkRate = 0.01                                #mhz; 200 is fastest
+        self.pll.SetOutputDivider(0, int(self.baseRate / self.clkRate)) 
+        self.pll.SetOutputEnable(0, True)
         ## self.pll.SetOutputSource(1, ok.PLL22393.ClkSrc_PLL0_0)  #clk2
-        ## self.pll.SetOutputDivider(1, self.baseRate / self.clkRate)        #div4 = 100 mhz
+        ## self.pll.SetOutputDivider(1, int(self.baseRate / self.clkRate))       #div4 = 100 mhz
         ## self.pll.SetOutputEnable(1, True)
-        ## self.xem.SetPLL22393Configuration(self.pll)
+        self.xem.SetPLL22393Configuration(self.pll)
         ## self.xem.SetEepromPLL22393Configuration(self.pll)
         self.xem.ConfigureFPGA(bitfile.encode('utf-8'))
         print(bitfile.encode('utf-8'))
@@ -132,28 +131,14 @@ class Model:
         self.xem.UpdateWireIns()
 
     def SendPara(self, trigEvent, newVal, newVal2 = None):
-        if trigEvent == DATA_EVT_X:
-            bitVal = ConvertType(newVal, fromType = 'f', toType = 'I')
-            bitValLo = bitVal & 0xffff
-            bitValHi = (bitVal >> 16) & 0xffff
-            self.xem.SetWireInValue(0x01, bitValLo, 0xffff)
-            self.xem.SetWireInValue(0x02, bitValHi, 0xffff)
-
-            bitVal = ConvertType(newVal2, fromType = 'f', toType = 'I')
-            bitValLo = bitVal & 0xffff
-            bitValHi = (bitVal >> 16) & 0xffff
-            self.xem.SetWireInValue(0x03, bitValLo, 0xffff)
-            self.xem.SetWireInValue(0x04, bitValHi, 0xffff)
-            self.xem.UpdateWireIns()
-            self.xem.ActivateTriggerIn(0x50, DATA_EVT_X)
-        elif trigEvent == DATA_EVT_CLKRATE:
-            self.pll.SetOutputDivider(0, newVal)        #div4 = 100 mhz
-            self.pll.SetOutputDivider(1, newVal)        #div4 = 100 mhz
-            self.xem.SetPLL22393Configuration(self.pll)
-            self.xem.SetEepromPLL22393Configuration(self.pll)
-            ## self.xem.SetWireInValue(0x01, newVal, 0xffff)
-            ## self.xem.UpdateWireIns();
-            ## self.xem.ActivateTriggerIn(0x50, 7)
+        if trigEvent == DATA_EVT_CLKRATE:
+            ## self.pll.SetOutputDivider(0, int(newVal))        #div4 = 100 mhz
+            ## self.pll.SetOutputDivider(1, int(newVal))        #div4 = 100 mhz
+            ## self.xem.SetPLL22393Configuration(self.pll)
+            ## self.xem.SetEepromPLL22393Configuration(self.pll)
+            self.xem.SetWireInValue(0x01, int(newVal), 0xffff)
+            self.xem.UpdateWireIns();
+            self.xem.ActivateTriggerIn(0x50, 7)
 
 class View(wx.Frame):
     def __init__(self, parent):
@@ -363,26 +348,16 @@ class Controller:
         self.ctrlView.sliderClk.Bind(wx.EVT_SLIDER, self.SendClkRate)
         self.ctrlView.tglReset.Bind(wx.EVT_TOGGLEBUTTON, self.OnReset)
 
-        self.xi = 0
-        self.old_int_x = 0.0
 
-        assert os.path.exists(MAT_FILE.encode('utf-8')), ".mat waveform file NOT found!"
-        data = loadmat(MAT_FILE)
-        self.x = data['x']
-        ## self.ctrlView.Bind(wx.EVT_TOGGLEBUTTON, self.OnReset, self.ctrlView.tglReset)
+       ## self.ctrlView.Bind(wx.EVT_TOGGLEBUTTON, self.OnReset, self.ctrlView.tglReset)
 
         pub.subscribe(self.WantMoney, "WANT MONEY")
 
         self.dispView.Show()
         self.ctrlView.Show()
 
-    def SendVelFlex(self, event):
-        ## newExtTrq = (self.ctrlView.slider8.GetValue() - 50)
-        newVelFlex = (self.ctrlView.slider4.GetValue() - 50) / 10.0 
-        self.nerfModel.SendPara(newVelFlex, DATA_EVT_VEL_FLEX)
-
     def SendClkRate(self, event):
-        newClkRate = self.ctrlView.sliderClk.GetValue() / 5 + 1
+        newClkRate = self.ctrlView.sliderClk.GetValue() / 10
         self.nerfModel.SendPara(newClkRate, DATA_EVT_CLKRATE)
 
     def OnReset(self, evt):
@@ -398,23 +373,13 @@ class Controller:
         didn't, message.topic would tell us.
         """
         ## self.dispView.SetMoney(message.data)
-        real_x = self.x[self.xi, 0]
-        self.nerfModel.SendPara(trigEvent = DATA_EVT_X, newVal = real_x,
-                                newVal2 = self.old_int_x)
-
         newVal = [0.0 for ix in range(NUM_CHANNEL)]
-        for i in xrange(NUM_CHANNEL - 1):
+        for i in xrange(NUM_CHANNEL):
             newVal[i] = self.nerfModel.ReadFPGA(DATA_OUT_ADDR[i])
-            ## print "%.4f" % newVal[i], 
-        newVal[NUM_CHANNEL - 1] = real_x
-        self.old_int_x = newVal[0]
+            ## print "%.4f" % newVal[0], 
 ##            newVal[i] = self.nerfModel.ReadFPGA16Bit(0x23)
 #            hi = ConvertType(hi, 'i', 'h')
         self.dispView.OnPaint(newVal = newVal)
-        if self.xi < len(self.x) - 1:
-            self.xi += 1
-        else:
-            self.xi = 0
 
 def ConvertType(val, fromType, toType):
     return unpack(toType, pack(fromType, val))[0]

@@ -1,5 +1,8 @@
 import math
 import struct, binascii
+from scipy.io import savemat, loadmat
+import os
+MAT_FILE = './testcase/integrator_cases.mat'
 
 def hextobinary(hex_string):
     s = int(hex_string, 16) 
@@ -16,9 +19,17 @@ def ConvertType(val, fromType, toType):
     return struct.unpack(toType, struct.pack(fromType, val))[0]
 
 
-for i in xrange(30) :
-    css = (2/(1+math.exp(-(i))))-1
-    packed = ConvertType(css, fromType = 'f', toType = 'I')
-    print "            10'd%d" % (i+1), " : out = 32'h%0x;" % packed
+assert os.path.exists(MAT_FILE.encode('utf-8')), ".mat waveform file NOT found!"
+data = loadmat(MAT_FILE)
+x = data['x']
+out = data['out']
+
+for i in xrange(len(x)) :
+    packed = ConvertType(x[i], fromType = 'f', toType = 'I')
+    print "                9'd%d" % i, " : sin_n <= 32'h%0x;" % packed
+
+## for i in xrange(len(x)) :
+##     packed = ConvertType(out[i], fromType = 'f', toType = 'I')
+##     print "            9'd%d" % i, " : int_sin_n <= 32'h%0x;" % packed
 
 ## print hextobinary(packed_hex)
