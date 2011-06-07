@@ -33,3 +33,22 @@ for i in xrange(len(x)) :
 ##     print "            9'd%d" % i, " : int_sin_n <= 32'h%0x;" % packed
 
 ## print hextobinary(packed_hex)
+f=2; %Hz
+SAMPLING_RATE = 1024;
+T = 1 / SAMPLING_RATE; % in seconds
+PERIODS = 5;
+
+w = f * 2 * pi * T;
+n = [0 : (2*pi  * PERIODS / w) - 1]';
+
+x=sin(w.*n);
+figure(1)
+hold on
+plot(n.*T, x)
+%plot(x, 'b')
+
+out = cumsum(x * T);
+plot(n.*T, out, 'r')
+%plot(out, 'r')
+
+save('~/nerf_project/py-nerf/testcase/integrator_cases.mat', 'x', 'out');

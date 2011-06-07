@@ -1,4 +1,4 @@
-import OpalKelly.ok as ok
+import opalkelly_4_0_3.ok as ok
 import time
 import wx
 from struct import pack, unpack
