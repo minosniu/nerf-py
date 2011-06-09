@@ -4,7 +4,7 @@ def gen():
     f = 2 # in Hz
     SAMPLING_RATE = 1024
     T = 1.0 / SAMPLING_RATE # in seconds
-    PERIODS = 4
+    PERIODS = 2
 
     w = f * 2 * pi * T
     max_n = int((2*pi  * PERIODS / w) - 1)

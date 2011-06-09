@@ -56,7 +56,7 @@ DATA_EVT_CLKRATE = 7
 DISPLAY_SCALING = [10, 125.7] 
 DATA_OUT_ADDR = [X_ADDR, INT_X_ADDR]
 ZERO_DATA = [0.0 for ix in xrange(NUM_CHANNEL)]
-BIT_FILE = "../clean_nerf/projects/pipe_in_wave_2048/pipe_in_wave_2048_xem3010.bit"
+BIT_FILE = "../nerf/projects/pipe_in_wave_2048/pipe_in_wave_2048_xem3010.bit"
 
 class Model:
     """ Once each data point is refreshed, it publishes a message called "WANT MONEY"
@@ -297,7 +297,7 @@ class Controller:
         self.nerfModel.SendPipe(pipeInData)
 
     def OnRunTest(self, evt):
-        self.data = self.nerfModel.ReadFPGA(2048 * 4 )
+        self.data = self.nerfModel.ReadFPGA(1023 * 4 )
 
     def OnPlotResult(self, evt):
         import pylab
