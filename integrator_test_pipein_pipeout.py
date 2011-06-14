@@ -297,7 +297,7 @@ class Controller:
         self.nerfModel.SendPipe(pipeInData)
 
     def OnRunTest(self, evt):
-        self.data = self.nerfModel.ReadFPGA(1023 * 4 )
+        self.data = self.data + self.nerfModel.ReadFPGA(1024 * 4 )
 
     def OnPlotResult(self, evt):
         import pylab
