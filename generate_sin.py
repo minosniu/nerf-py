@@ -1,8 +1,7 @@
 from numpy import *
 
-def gen():
-    f = 4 # in Hz
-    SAMPLING_RATE = 1024
+def gen(SAMPLING_RATE = 1024):
+    f = 4 # in Hz, continuous freq
     T = 1.0 / SAMPLING_RATE # in seconds
     PERIODS = 4
     BIAS = 1.0

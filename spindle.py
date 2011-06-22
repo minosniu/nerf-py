@@ -2,6 +2,7 @@ from pylab import plot, show, subplot
 from math import exp
 from generate_sin import gen
 
+SAMPLING_RATE = 1024
 ##############
 # PARAMETERS #
 ##############
@@ -69,24 +70,24 @@ def bag1_loeb_full(gammaDyn, lce, x_0, x_1, x_2):
     ## print 'x_1=', x_1
     ## print 'x_2=', x_2
     ## print 'dx_2=', dx_2
+    ## CSS[j]=(2/(1+exp(-1000*x[2+3*j])))-1; //temporary var used for dx[2+3*j]
     if (-1000.0*x_2 > 100.0):
-        CSS_exp = 1.0
+        CSS = -1.0
     elif (-1000.0*x_2 < -100.0):
-        CSS_exp = 0.0
+        CSS = 1.0
     else:
-        CSS_exp = exp(-1000.0*x_2)
-    CSS = (2.0 / (1.0 + CSS_exp ) ) - 1.0
-    #sig = ((x_1-RLDFV) > 0.0) * (x_1 - RLDFV)
+        CSS = (2.0 / (1.0 + exp(-1000.0*x_2) ) ) - 1.0
+    # sig = ((x_1-RLDFV) > 0.0) * (x_1 - RLDFV)
     #dx[2] = (1/M[0])*(KSR[0]*(*LcePtrs[0])-(KSR[0]+KPR[0])*x[1]-CSS*(B[0]*x[0])*fabs(x[2])-0.4);
     #dx[2+3*j] = (1/M[j])*(KSR[j]*(*LcePtrs[0])-(KSR[j]+KPR[j])*x[1+3*j]-CSS[j]*(B0[j]+B[j]*x[0+3*j])*sig[j]*(pow((fabs(x[2+3*j])),a[j]))-(F0[j]+F[j]*x[0+3*j])-KSR[j]*LSR0[j]+KPR[j]*LPR0[j]); //LPR'_in                    
     # @Sirish: That was BDAMP intead of B0DAMP
     dx_2 = (1/MASS) * (KSR*lce - (KSR+KPR)*x_1 - CSS*(BDAMP*x_0)*(abs(x_2)) - 0.4) 
-    # dx_2 = (1/MASS)*(KSR*lce-(KSR+KPR)*x_1-CSS*(BDAMP_PASSIVE+BDAMP*x_0)*sig*(pow((abs(x_2)),ANONLINEAR))-(F0ACT+FACT*x_0)-KSR*LSR0+KPR*LPR0)
+    #dx_2 = (1/MASS)*(KSR*lce-(KSR+KPR)*x_1-CSS*(BDAMP_PASSIVE+BDAMP*x_0)*sig*(pow((abs(x_2)),ANONLINEAR))-(F0ACT+FACT*x_0)-KSR*LSR0+KPR*LPR0)
     return [dx_0, dx_1, dx_2]
 
 
 Lce = []
-Lce = gen()
+Lce = gen(SAMPLING_RATE)
 
 #plot(Lce)
 
@@ -106,13 +107,13 @@ for lce_i in Lce:
     #### Beginning of Heun's Method
     ## 
     ## [dx_0, dx_1, dx_2] = bag1_loeb_full(GAMMA_DYN, lce_i, x_0, x_1, x_2)
-    ## xx_0 = x_0 + dx_0 *(1.0/1024)
-    ## xx_1 = x_1 + dx_1 *(1.0/1024)
-    ## xx_2 = x_2 + dx_2 *(1.0/1024)
+    ## xx_0 = x_0 + dx_0 *(1.0/SAMPLING_RATE)
+    ## xx_1 = x_1 + dx_1 *(1.0/SAMPLING_RATE)
+    ## xx_2 = x_2 + dx_2 *(1.0/SAMPLING_RATE)
     ## [ddx_0, ddx_1, ddx_2] = bag1_loeb_full(GAMMA_DYN, lce_i, xx_0, xx_1, xx_2)
-    ## x_0 = x_0 + (ddx_0 + dx_0) / 2.0 *(1.0/1024)
-    ## x_1 = x_1 + (ddx_1 + dx_1) / 2.0 *(1.0/1024)
-    ## x_2 = x_2 + (ddx_2 + dx_2) / 2.0 *(1.0/1024)
+    ## x_0 = x_0 + (ddx_0 + dx_0) / 2.0 *(1.0/SAMPLING_RATE)
+    ## x_1 = x_1 + (ddx_1 + dx_1) / 2.0 *(1.0/SAMPLING_RATE)
+    ## x_2 = x_2 + (ddx_2 + dx_2) / 2.0 *(1.0/SAMPLING_RATE)
 
     ## dx_0_plot.append((dx_0 + ddx_0) / 2.0)
     ## dx_1_plot.append((dx_1 + ddx_1) / 2.0)
@@ -125,9 +126,9 @@ for lce_i in Lce:
 
     ## Beginning of Eular's Method (ODE1)
     [dx_0, dx_1, dx_2] = bag1_loeb_full(GAMMA_DYN, lce_i, x_0, x_1, x_2)
-    x_0 = x_0 + dx_0 *(1.0/1024)
-    x_1 = x_1 + dx_1 *(1.0/1024)
-    x_2 = x_2 + dx_2 *(1.0/1024)
+    x_0 = x_0 + dx_0 *(1.0/SAMPLING_RATE)
+    x_1 = x_1 + dx_1 *(1.0/SAMPLING_RATE)
+    x_2 = x_2 + dx_2 *(1.0/SAMPLING_RATE)
 
     dx_0_plot.append(dx_0)
     dx_1_plot.append(dx_1)
@@ -137,7 +138,7 @@ for lce_i in Lce:
     x_2_plot.append(x_2)
     ## End of Eular's Method (ODE1)
 
-    Ia_fiber = GI*(lce_i-x_1-LSR0)
+    Ia_fiber = max(GI*(lce_i-x_1-LSR0), 0.0)
     Ia_fiber_plot.append(Ia_fiber)
 
 subplot(211)
