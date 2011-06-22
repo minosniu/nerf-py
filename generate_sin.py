@@ -5,12 +5,14 @@ def gen():
     SAMPLING_RATE = 1024
     T = 1.0 / SAMPLING_RATE # in seconds
     PERIODS = 2
+    BIAS = 1.0
+    AMP = 0.2
 
     w = f * 2 * pi * T
     max_n = int((2*pi  * PERIODS / w) - 1)
     n = linspace(0 , max_n + 1, max_n + 1)
 
-    x = sin(w * n)
+    x = AMP * sin(w * n) + BIAS
     return x
 
 
