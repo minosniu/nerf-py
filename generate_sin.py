@@ -1,10 +1,10 @@
 from numpy import *
 
 def gen():
-    f = 2 # in Hz
+    f = 4 # in Hz
     SAMPLING_RATE = 1024
     T = 1.0 / SAMPLING_RATE # in seconds
-    PERIODS = 2
+    PERIODS = 4
     BIAS = 1.0
     AMP = 0.2
 
