@@ -1,8 +1,8 @@
-import OpalKelly.ok as ok
+import opalkelly_4_0_3.ok as ok
 import time
 import wx
 from struct import pack, unpack
-DIV1 = 120.0
+DIV1 = 100.0 
 DIV2 = 10.0
 DIV_ADDR = 0x20 
 DEFAULT_FILE = "../local/projects/rsqrt_test/rsqrt_tester.bit"
@@ -121,10 +121,10 @@ class CountersFrame(wx.Frame):
         self.xem.SetWireInValue(0x02, bitVal >> 0, 0xffff)
         self.xem.SetWireInValue(0x03, bitVal >> 16, 0xffff)
         self.xem.UpdateWireIns()
-        self.xem.ActivateTriggerIn(0x50, 0)
+        ##self.xem.ActivateTriggerIn(0x50, 0)
 
         self.xem.UpdateWireOuts()
-        self.xem.UpdateTriggerOuts()
+        ##self.xem.UpdateTriggerOuts()
 
         outValLo = self.xem.GetWireOutValue(DIV_ADDR) & 0xffff # length = 16-bit
         outValHi = self.xem.GetWireOutValue(DIV_ADDR + 0x01) & 0xffff

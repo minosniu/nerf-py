@@ -2,8 +2,13 @@
 
 """
 Test the fp_spindle_bag1.v, wrapper fp_spindle_test.
-Gamma_dyn > 0
-Gamma_sta > 0
+sin(omega * T * n) = sin(w * n)
+omega * T = w
+omega: analog freq
+w: digital freq, 1kHz in all test cases
+T: digital interval, depends on the wxPython clock, NOT the XEM pll clock!
+
+
 Vary Pos_flex to see changes in Ia_pps 
 
 C. Minos Niu (minos.niu AT sangerlab.net)
@@ -15,11 +20,11 @@ import random
 import sys
 import wx
 import wx.lib.plot as plot
-import math
 import thread, time
 from struct import pack, unpack
+from scipy.io import savemat, loadmat
 from wx.lib.pubsub import Publisher as pub
-import OpalKelly.ok as ok
+import opalkelly_4_0_3.ok as ok
 
 # The recommended way to use wx with mpl is with the WXAgg backend.
 #
@@ -30,26 +35,25 @@ import OpalKelly.ok as ok
 ##     FigureCanvasWxAgg as FigCanvas, \
 ##     NavigationToolbar2WxAgg as NavigationToolbar
 import numpy as np
-import pylab
 
-VIEWER_REFRESH_RATE = 10 # in ms
-CSS_ADDR = 0x20 
-II1_ADDR = 0x22 
-VAR2_ADDR = 0x24 
-VAR3_ADDR = 0x26 
-VAR4_ADDR = 0x28 
-VAR5_ADDR = 0x2A 
-VAR6_ADDR = 0x30 
-VAR7_ADDR = 0x32 
+VIEWER_REFRESH_RATE = 20 # in ms, This the T for calculating digital freq
+NUM_CHANNEL = 2 # Number of channels
+X_ADDR = 0x20 
+INT_X_ADDR = 0x22 
+## II1_ADDR = 0x22 
+## VAR2_ADDR = 0x24 
+## VAR3_ADDR = 0x26 
+## VAR4_ADDR = 0x28 
+## VAR5_ADDR = 0x2A 
+## VAR6_ADDR = 0x30 
+## VAR7_ADDR = 0x32 
 
-DATA_EVT_X = 0
 DATA_EVT_CLKRATE = 7
 ##DISPLAY_SCALING = [0.1, 500, 500, 10, 10, 10, 5, 5]
-NUM_CHANNEL = 1 # Number of channels
-DISPLAY_SCALING = [1.0]
-DATA_OUT_ADDR = [CSS_ADDR, II1_ADDR, VAR2_ADDR, VAR3_ADDR, \
-                 VAR4_ADDR, VAR5_ADDR, VAR6_ADDR, VAR7_ADDR]
+DISPLAY_SCALING = [10, 125.7] 
+DATA_OUT_ADDR = [X_ADDR, INT_X_ADDR]
 ZERO_DATA = [0.0 for ix in xrange(NUM_CHANNEL)]
+BIT_FILE = "../clean_nerf/projects/autotester/autotester_xem3010.bit"
 
 class Model:
     """ Once each data point is refreshed, it publishes a message called "WANT MONEY"
@@ -59,21 +63,19 @@ class Model:
         self.ConfigureXEM()
 
     def ConfigureXEM(self):
-        ## dlg = wx.FileDialog( self, message="Open the Counters
-        ##         bitfile (counters.bit)",
-        ##         defaultDir="/home/minosniu/Downloads/counter2/counter2",
-        ##         defaultFile="counters.bit", wildcard="*.bit",
+        ## dlg = wx.FileDialog( self, message="Open the Counters bitfile (counters.bit)",
+        ##         defaultDir="", defaultFile=BIT_FILE, wildcard="*.bit",
         ##         style=wx.OPEN | wx.CHANGE_DIR )
         
         # Show the dialog and retrieve the user response. If it is the OK response, 
         # process the data.
         ## if (dlg.ShowModal() == wx.ID_OK):
         ##     bitfile = dlg.GetPath()
-        defaultDir="../local/projects/rsqrt_test/"
-        defaultFile="rsqrt_tester.bit"
+        ## defaultDir="../local/projects/fp_spindle_test/"
+        ## defaultFile="fp_spindle_test.bit"
         ## defaultFile="counters_fp_muscle.bit"
 
-        bitfile = defaultDir + defaultFile
+        bitfile = BIT_FILE
         assert os.path.exists(bitfile.encode('utf-8')), ".bit file NOT found!"
             
         self.xem = ok.FrontPanel()
@@ -83,36 +85,20 @@ class Model:
         self.xem.LoadDefaultPLLConfiguration()
 
         self.pll = ok.PLL22393()
-        self.pll.SetReference(48.0)        #base clock frequency
-        self.baseRate = 100
-        self.pll.SetPLLParameters(0, self.baseRate, 48,  True)            #multiply up to 400mhz
+        self.pll.SetReference(48)        #base clock frequency
+        self.baseRate = 1 #in MHz
+        self.pll.SetPLLParameters(0, self.baseRate, 48,  True)            #multiply up to baseRate 
         self.pll.SetOutputSource(0, ok.PLL22393.ClkSrc_PLL0_0)  #clk1 
-        self.clkRate = 100                                #mhz; 200 is fastest
-        self.pll.SetOutputDivider(0, self.baseRate / self.clkRate)        #div4 = 100mhz; div128 = 4mhz
+        self.clkRate = 0.01                                #mhz; 200 is fastest
+        self.pll.SetOutputDivider(0, int(self.baseRate / self.clkRate)) 
         self.pll.SetOutputEnable(0, True)
-        self.pll.SetOutputSource(1, ok.PLL22393.ClkSrc_PLL0_0)  #clk2
-        self.pll.SetOutputDivider(1, self.baseRate / self.clkRate)        #div4 = 100 mhz
-        self.pll.SetOutputEnable(1, True)
+        ## self.pll.SetOutputSource(1, ok.PLL22393.ClkSrc_PLL0_0)  #clk2
+        ## self.pll.SetOutputDivider(1, int(self.baseRate / self.clkRate))       #div4 = 100 mhz
+        ## self.pll.SetOutputEnable(1, True)
         self.xem.SetPLL22393Configuration(self.pll)
-        self.xem.SetEepromPLL22393Configuration(self.pll)
+        ## self.xem.SetEepromPLL22393Configuration(self.pll)
         self.xem.ConfigureFPGA(bitfile.encode('utf-8'))
         print(bitfile.encode('utf-8'))
-
-        ## delta_t is the real time percounter sample.
-        self.updateRate = self.clkRate / 4
-        self.delayCount = 128
-        self.delta_t = (0.001 * self.updateRate) / (self.delayCount)
-        self.xem.SetWireInValue(0x01, 1, 0xffff)
-        self.xem.UpdateWireIns()
-        self.xem.ActivateTriggerIn(0x50, 7)
-
-        ## set the learning rate for stdp (????)
-        self.gamma_plus = 7
-        self.gamma_minus = 7
-        self.xem.SetWireInValue(0x01, self.gamma_plus, 0xffff)  ## set the software delay
-        self.xem.SetWireInValue(0x02, self.gamma_minus, 0xffff)  ## set the software delay
-        self.xem.UpdateWireIns()
-        self.xem.ActivateTriggerIn(0x50, 9)  ## tell the chip there is new data
 
     def ReadFPGA(self, getAddr):
 
@@ -123,10 +109,10 @@ class Model:
         outValLo = self.xem.GetWireOutValue(getAddr) & 0xffff # length = 16-bit
         outValHi = self.xem.GetWireOutValue(getAddr + 0x01) & 0xffff
         outVal = ((outValHi << 16) + outValLo) & 0xFFFFFFFF
-        outVal = ConvertType(outVal, 'i', 'f')
+        outVal = ConvertType(outVal, 'I', 'f')
         ## if getAddr == DATA_OUT_ADDR[0]:
         ##     print "%2.4f" % outVal, 
-            ##print "%d" % (outValLo), 
+        ##     ##print "%d" % (outValLo), 
         
         ## Python default int is unsigned, use pack/unpack to
         ## convert into signed
@@ -144,20 +130,15 @@ class Model:
             self.xem.SetWireInValue(0x00, 0x00, 0xff)
         self.xem.UpdateWireIns()
 
-    def SendPara(self, newVal, trigEvent):
-        if trigEvent == DATA_EVT_X:
-            bitVal = newVal
-            bitValLo = bitVal & 0xffff
-            bitValHi = (bitVal >> 16) & 0xffff
-            self.xem.SetWireInValue(0x00, bitValLo, 0xffff)
-            self.xem.SetWireInValue(0x01, bitValHi, 0xffff)
-            self.xem.UpdateWireIns()
-            ##self.xem.ActivateTriggerIn(0x50, DATA_EVT_X)
-        elif trigEvent == DATA_EVT_CLKRATE:
-            self.pll.SetOutputDivider(0, newVal)        #div4 = 100 mhz
-            self.pll.SetOutputDivider(1, newVal)        #div4 = 100 mhz
-            self.xem.SetPLL22393Configuration(self.pll)
-            self.xem.SetEepromPLL22393Configuration(self.pll)
+    def SendPara(self, trigEvent, newVal, newVal2 = None):
+        if trigEvent == DATA_EVT_CLKRATE:
+            ## self.pll.SetOutputDivider(0, int(newVal))        #div4 = 100 mhz
+            ## self.pll.SetOutputDivider(1, int(newVal))        #div4 = 100 mhz
+            ## self.xem.SetPLL22393Configuration(self.pll)
+            ## self.xem.SetEepromPLL22393Configuration(self.pll)
+            self.xem.SetWireInValue(0x01, int(newVal), 0xffff)
+            self.xem.UpdateWireIns();
+            self.xem.ActivateTriggerIn(0x50, 7)
 
 class View(wx.Frame):
     def __init__(self, parent):
@@ -209,14 +190,6 @@ class View(wx.Frame):
 
     def OnExit(self, event):
         self.Destroy()
-
-    def OnPauseButton(self, event):
-        ## self.xem.ActivateTriggerIn(0x50, 15)
-        self.paused = not self.paused
-        
-    def OnUpdatePauseButton(self, event):
-        label = "Resume" if self.paused else "Pause"
-        self.pause_button.SetLabel(label)
 
     def OnPaint(self, event = None, newVal = ZERO_DATA):
 
@@ -341,16 +314,14 @@ class ChangerView(wx.Frame):
         ## sizer.Add(self.remove, 0, wx.EXPAND | wx.ALL)
         ## self.SetSizer(sizer)
 
-        self.sliderClk = wx.Slider(self.panel, -1, 50, 0, 100, (10, 10), (250, 50),
+        self.sliderClk = wx.Slider(self.panel, -1, 0, 0, 100, (10, 10), (250, 50),
                                   wx.SL_HORIZONTAL | wx.SL_AUTOTICKS | wx.SL_LABELS)
         self.tglReset = wx.ToggleButton(self.panel, -1, "Reset", wx.Point(20,25), wx.Size(60,20))
 
-        self.labelClk = wx.StaticText(self.panel, -1, "ClockRate")
 #        self.label1.SetBackgroundColour((self.Red1, self.Green1, self.Blue1))
 
         self.hbox = wx.BoxSizer(wx.VERTICAL)
         self.hbox.Add(self.sliderClk, border=5, flag=wx.ALL|wx.EXPAND)
-        self.hbox.Add(self.labelClk,flag=wx.ALIGN_CENTER, border=5)
 
         self.hbox.Add(self.tglReset, border=5, flag=wx.ALL|wx.EXPAND)
         self.hbox.Add(self.tglReset,flag=wx.ALIGN_CENTER, border=5)
@@ -364,53 +335,34 @@ class Controller:
         self.nerfModel = Model()
 
         #set up the first frame which displays the current Model value
-        ## self.dispView = View(None)
+        self.dispView = View(None)
+        ## thread.start_new_thread(self.nerfModel.ReadFPGA, ("Refreshing data", 0.05, 0x20))
+        ## self.dispView.SetMoney(self.nerfModel.myMoney)
 
         #set up the second frame which allows the user to modify the Model's value
-        ##self.ctrlView = ChangerView(self.dispView)
-        self.ctrlView = ChangerView(None)
+        self.ctrlView = ChangerView(self.dispView)
+        ## self.ctrlView.add.Bind(wx.EVT_BUTTON, self.AddMoney)
+        ## self.ctrlView.remove.Bind(wx.EVT_BUTTON, self.RemoveMoney)
+
+        ## self.ctrlView.slider1.Bind(wx.EVT_SLIDER, self.UpdateIa)
         self.ctrlView.sliderClk.Bind(wx.EVT_SLIDER, self.SendClkRate)
-       ## self.ctrlView.tglReset.Bind(wx.EVT_TOGGLEBUTTON, self.OnReset)
-        self.ctrlView.Bind(wx.EVT_TOGGLEBUTTON, self.OnReset, self.ctrlView.tglReset)
+        self.ctrlView.tglReset.Bind(wx.EVT_TOGGLEBUTTON, self.OnReset)
 
-        self.x = ConvertType(12.34, 'f', 'i') ## The input for css_term module
 
-        ##pub.subscribe(self.WantMoney, "WANT MONEY")
+       ## self.ctrlView.Bind(wx.EVT_TOGGLEBUTTON, self.OnReset, self.ctrlView.tglReset)
 
-        ## self.dispView.Show()
+        pub.subscribe(self.WantMoney, "WANT MONEY")
+
+        self.dispView.Show()
         self.ctrlView.Show()
 
     def SendClkRate(self, event):
-        newClkRate = self.ctrlView.slider7.GetValue() / 5 + 1
+        newClkRate = self.ctrlView.sliderClk.GetValue() / 10
         self.nerfModel.SendPara(newClkRate, DATA_EVT_CLKRATE)
 
     def OnReset(self, evt):
         newReset = self.ctrlView.tglReset.GetValue()
         self.nerfModel.SendReset(newReset)
-        if newReset :
-            self.x = 0x00
-        else:
-            ix = ConvertType(12.34, 'f', 'I')
-            while ix < 0xffffffff:
-                self.nerfModel.SendPara(ix, DATA_EVT_X)
-                newVal = [0.0 for xx in range(NUM_CHANNEL)]
-                for i in xrange(NUM_CHANNEL):
-                    newVal[i] = self.nerfModel.ReadFPGA(DATA_OUT_ADDR[i])
-                    ## newVal[i] = ConvertType(self.x, 'I', 'f')
-                    real_x = ConvertType(ix, 'I', 'f')
-                    if real_x < 0.0:
-                        print "x = %.4f" % real_x
-                        continue
-                    real_fx = 1 / math.sqrt(real_x)
-                    err = abs(newVal[i] - real_fx)
-                    if err > 0.01:
-                        print "x = %.4f" % ConvertType(self.x, 'i', 'f'),
-                        print "rsqrt = %.4f" % newVal[i],
-                        print "pyrsq = %.4f" % (1 / math.sqrt(real_x)),
-                        print "err = %.4f" % (newVal[i] - 1 / math.sqrt(real_x))
-                ix += 0x10000
-            
-
 
     def WantMoney(self, message):
         """
@@ -420,7 +372,14 @@ class Controller:
         We already know the topic is "WANT MONEY", but if we
         didn't, message.topic would tell us.
         """
-        ##self.dispView.OnPaint(newVal = newVal)
+        ## self.dispView.SetMoney(message.data)
+        newVal = [0.0 for ix in range(NUM_CHANNEL)]
+        for i in xrange(NUM_CHANNEL):
+            newVal[i] = self.nerfModel.ReadFPGA(DATA_OUT_ADDR[i])
+            ## print "%.4f" % newVal[0], 
+##            newVal[i] = self.nerfModel.ReadFPGA16Bit(0x23)
+#            hi = ConvertType(hi, 'i', 'h')
+        self.dispView.OnPaint(newVal = newVal)
 
 def ConvertType(val, fromType, toType):
     return unpack(toType, pack(fromType, val))[0]
