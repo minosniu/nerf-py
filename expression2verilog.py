@@ -16,7 +16,7 @@ def parse_exp(exp):
     par_cnt = 0
     reright = releft = rechop = ""
     tree = node(exp)
-    for i in (xrange(len(exp))):
+    for i in reversed(xrange(len(exp))):
         ch = exp[i]
         if PAR_OPEN.find(ch) != -1:
             par_cnt += 1
@@ -29,7 +29,7 @@ def parse_exp(exp):
             tree.left = parse_exp(left)
             tree.right = parse_exp(right)
             return tree
-    for i in (xrange(len(exp))):
+    for i in reversed(xrange(len(exp))):
         ch = exp[i]
         if PAR_OPEN.find(ch) != -1:
             par_cnt += 1
@@ -52,12 +52,12 @@ def disp(tree, depth, lr = ''):
     if tree.opt == None:
         return tree.data
     else:
-        right_label = disp(tree.right, depth + 1, lr + 'R')
         left_label = disp(tree.left, depth + 1, lr + 'L')
+        right_label = disp(tree.right, depth + 1, lr + 'R')
         if lr == '':
             node_label = TERM_LABEL + "F%d" % depth
         else:
-            node_label = TERM_LABEL + lr+"%d" % depth
+            node_label = TERM_LABEL + lr + "%d" % depth
         print "\n //    ", left_label, '\t' + 4* tree.opt + '\t', right_label + "    =>    " + node_label
         if tree.opt == '+':
             print "add %s_add( .x(%s), .y(%s), .out(%s) );" % (node_label, left_label, right_label, node_label)

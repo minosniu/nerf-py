@@ -2,7 +2,7 @@ import math
 import struct, binascii
 from scipy.io import savemat, loadmat
 import os
-MAT_FILE = './testcase/integrator_cases.mat'
+MAT_FILE = './testcase/firing_intervals.mat'
 
 def hextobinary(hex_string):
     s = int(hex_string, 16) 
@@ -22,33 +22,10 @@ def ConvertType(val, fromType, toType):
 assert os.path.exists(MAT_FILE.encode('utf-8')), ".mat waveform file NOT found!"
 data = loadmat(MAT_FILE)
 x = data['x']
-out = data['out']
+#out = data['out']
 
 for i in xrange(len(x)) :
-    packed = ConvertType(x[i], fromType = 'f', toType = 'I')
-    print "                9'd%d" % i, " : sin_n <= 32'h%0x;" % packed
+    packed = x[i]
+    #ConvertType(x[i], fromType = 'f', toType = 'I')
+    print "                11'd%d" % i, " : isi = 11'h%0x;" % packed
 
-## for i in xrange(len(x)) :
-##     packed = ConvertType(out[i], fromType = 'f', toType = 'I')
-##     print "            9'd%d" % i, " : int_sin_n <= 32'h%0x;" % packed
-
-## print hextobinary(packed_hex)
-f=2; %Hz
-SAMPLING_RATE = 1024;
-T = 1 / SAMPLING_RATE; % in seconds
-PERIODS = 5;
-
-w = f * 2 * pi * T;
-n = [0 : (2*pi  * PERIODS / w) - 1]';
-
-x=sin(w.*n);
-figure(1)
-hold on
-plot(n.*T, x)
-%plot(x, 'b')
-
-out = cumsum(x * T);
-plot(n.*T, out, 'r')
-%plot(out, 'r')
-
-save('~/nerf_project/py-nerf/testcase/integrator_cases.mat', 'x', 'out');
