@@ -54,7 +54,7 @@ DATA_EVT_PPS = 8
 DISPLAY_SCALING = [10, 125.7] 
 DATA_OUT_ADDR = [X_ADDR, INT_X_ADDR]
 ZERO_DATA = [0.0 for ix in xrange(NUM_CHANNEL)]
-BIT_FILE = "../clean_nerf/projects/spindle_neuron/spindle_neuron_xem3010.bit"
+BIT_FILE = "../nerf/projects/spindle_neuron/spindle_neuron_xem3010.bit"
 
 class Model:
     """ Once each data point is refreshed, it publishes a message called "WANT MONEY"
@@ -87,10 +87,10 @@ class Model:
 
         self.pll = ok.PLL22393()
         self.pll.SetReference(48)        #base clock frequency
-        self.baseRate = 1 #in MHz
+        self.baseRate = 48 #in MHz
         self.pll.SetPLLParameters(0, self.baseRate, 48,  True)            #multiply up to baseRate 
         self.pll.SetOutputSource(0, ok.PLL22393.ClkSrc_PLL0_0)  #clk1 
-        self.clkRate = 0.1                                #mhz; 200 is fastest
+        self.clkRate = 2                                #mhz; 200 is fastest
         self.pll.SetOutputDivider(0, int(self.baseRate / self.clkRate)) 
         self.pll.SetOutputEnable(0, True)
         ## self.pll.SetOutputSource(1, ok.PLL22393.ClkSrc_PLL0_0)  #clk2
@@ -131,22 +131,24 @@ class Model:
             self.xem.SetWireInValue(0x00, 0x00, 0xff)
         self.xem.UpdateWireIns()
 
-    def SendPara(self, trigEvent, newVal):
+    def SendPara(self, newVal, trigEvent):
         if trigEvent == DATA_EVT_CLKRATE:
             ## self.pll.SetOutputDivider(0, int(newVal))        #div4 = 100 mhz
             ## self.pll.SetOutputDivider(1, int(newVal))        #div4 = 100 mhz
             ## self.xem.SetPLL22393Configuration(self.pll)
             ## self.xem.SetEepromPLL22393Configuration(self.pll)
             self.xem.SetWireInValue(0x02, int(newVal), 0xffff)
-            self.xem.UpdateWireIns();
+	    print int(newVal)
+            self.xem.UpdateWireIns()
             self.xem.ActivateTriggerIn(0x50, 7)
-        if trigEvent == DATA_EVT_CLKRATE:
-            bitVal = int(newVal)
+        if trigEvent == DATA_EVT_PPS:
+            bitVal = (newVal)
             bitValLo = bitVal & 0xffff
             bitValHi = (bitVal >> 16) & 0xffff
-            self.xem.SetWireInValue(0x01, bitValLo, 0xffff)
-            self.xem.SetWireInValue(0x02, bitValHi, 0xffff)
-            self.xem.UpdateWireIns();
+            self.xem.SetWireInValue(0x00, bitValLo, 0xffff)
+            self.xem.SetWireInValue(0x01, bitValHi, 0xffff)
+            self.xem.UpdateWireIns()
+	    self.xem.ActivateTriggerIn(0x50, 8)
 
 class View(wx.Frame):
     def __init__(self, parent):
@@ -367,17 +369,21 @@ class Controller:
 
        ## self.ctrlView.Bind(wx.EVT_TOGGLEBUTTON, self.OnReset, self.ctrlView.tglReset)
 
-        pub.subscribe(self.WantMoney, "WANT MONEY")
+        ##pub.subscribe(self.WantMoney, "WANT MONEY")
 
         self.dispView.Show()
         self.ctrlView.Show()
 
     def SendClkRate(self, event):
-        newClkRate = self.ctrlView.sliderClk.GetValue() * 100 
+        newClkRate = (self.ctrlView.sliderClk.GetValue() * 10) - 1
+	newClkRate = newClkRate * (newClkRate >= 0)
+	##print newClkRate 
         self.nerfModel.SendPara(newClkRate, DATA_EVT_CLKRATE)
 
     def SendPps(self, event):
-        newClkRate = (self.ctrlView.sliderPps.GetValue() + 1) * 2  
+        newClkRate = (self.ctrlView.sliderPps.GetValue() + 1) * 1.0
+	##print newClkRate
+	newClkRate = ConvertType(newClkRate, 'f', 'I')  
         self.nerfModel.SendPara(newClkRate, DATA_EVT_PPS)
 
     def OnReset(self, evt):
