@@ -56,7 +56,7 @@ DATA_EVT_CLKRATE = 7
 DISPLAY_SCALING = [10, 125.7] 
 DATA_OUT_ADDR = [X_ADDR, INT_X_ADDR]
 ZERO_DATA = [0.0 for ix in xrange(NUM_CHANNEL)]
-BIT_FILE = "../clean_nerf/projects/pipe_in_wave_2048/pipe_in_wave_2048_xem3010.bit"
+BIT_FILE = "../nerf/projects/pipe_in_wave_2048/pipe_in_wave_2048_xem3050.bit"
 
 class Model:
     """ Once each data point is refreshed, it publishes a message called "WANT MONEY"
@@ -120,8 +120,16 @@ class Model:
 
     def SendReset(self, resetValue):
         if (resetValue) :
-            self.xem.SetWireInValue(0x00, 0x01, 0xff)
+            self.xem.SetWireInValue(0x00, 0x04, 0xff)
             print resetValue,
+        else :
+            self.xem.SetWireInValue(0x00, 0x00, 0xff)
+        self.xem.UpdateWireIns()
+
+    def SendExecute(self, executeValue):
+        if (executeValue) :
+            self.xem.SetWireInValue(0x00, 0x02, 0xff)
+            print executeValue,
         else :
             self.xem.SetWireInValue(0x00, 0x00, 0xff)
         self.xem.UpdateWireIns()
@@ -240,8 +248,9 @@ class ChangerView(wx.Frame):
         self.sliderClk = wx.Slider(self.panel, -1, 0, 0, 100, (10, 10), (250, 50),
                                   wx.SL_HORIZONTAL | wx.SL_AUTOTICKS | wx.SL_LABELS)
         self.tglReset = wx.ToggleButton(self.panel, -1, "Reset", wx.Point(20,25), wx.Size(50,30))
-        self.feedData = wx.Button(self.panel, -1, "Feed", wx.Point(20,25), wx.Size(50,30))
-        self.runTest = wx.Button(self.panel, -1, "Run", wx.Point(20,25), wx.Size(50,30))
+	self.tglExecute = wx.ToggleButton(self.panel, -1, "Execute", wx.Point(20,25), wx.Size(50,30))
+        self.feedData = wx.Button(self.panel, -1, "Feed Input Waveform", wx.Point(20,25), wx.Size(50,30))
+        self.runTest = wx.Button(self.panel, -1, "Read Out", wx.Point(20,25), wx.Size(50,30))
         self.plotResult = wx.Button(self.panel, -1, "Plot", wx.Point(20,25), wx.Size(50,30))
 
 #        self.label1.SetBackgroundColour((self.Red1, self.Green1, self.Blue1))
@@ -249,6 +258,7 @@ class ChangerView(wx.Frame):
         self.hbox = wx.BoxSizer(wx.VERTICAL)
         self.hbox.Add(self.sliderClk, border=5, flag=wx.ALL|wx.EXPAND)
         self.hbox.Add(self.tglReset, border=5, flag=wx.ALL|wx.EXPAND)
+	self.hbox.Add(self.tglExecute, border=5, flag=wx.ALL|wx.EXPAND)
         self.hbox.Add(self.feedData, border=5, flag=wx.ALL|wx.EXPAND)
         self.hbox.Add(self.runTest, border=5, flag=wx.ALL|wx.EXPAND)
         self.hbox.Add(self.plotResult, border=5, flag=wx.ALL|wx.EXPAND)
@@ -274,6 +284,7 @@ class Controller:
         ## self.ctrlView.slider1.Bind(wx.EVT_SLIDER, self.UpdateIa)
         self.ctrlView.Bind(wx.EVT_SLIDER, self.SendClkRate, self.ctrlView.sliderClk)
         self.ctrlView.Bind(wx.EVT_TOGGLEBUTTON, self.OnReset, self.ctrlView.tglReset)
+	self.ctrlView.Bind(wx.EVT_TOGGLEBUTTON, self.OnExecute, self.ctrlView.tglExecute)
         self.ctrlView.Bind(wx.EVT_BUTTON, self.OnFeedData, self.ctrlView.feedData)
         self.ctrlView.Bind(wx.EVT_BUTTON, self.OnRunTest, self.ctrlView.runTest)
         self.ctrlView.Bind(wx.EVT_BUTTON, self.OnPlotResult, self.ctrlView.plotResult)
@@ -291,6 +302,10 @@ class Controller:
     def OnReset(self, evt):
         newReset = self.ctrlView.tglReset.GetValue()
         self.nerfModel.SendReset(newReset)
+
+    def OnExecute(self, evt):
+        newExecute = self.ctrlView.tglExecute.GetValue()
+        self.nerfModel.SendExecute(newExecute)
 
     def OnFeedData(self, evt):
         pipeInData = gen()
