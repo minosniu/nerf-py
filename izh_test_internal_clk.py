@@ -20,6 +20,7 @@ import random
 import sys
 import wx
 import wx.lib.plot as plot
+import wx.lib.agw.floatspin as FS
 import thread, time
 from struct import pack, unpack
 from scipy.io import savemat, loadmat
@@ -48,6 +49,7 @@ AP_ADDR = 0x22
 ## VAR7_ADDR = 0x32 
 
 DATA_EVT_CLKRATE = 7
+DATA_EVT_PPS = 4
 ##DISPLAY_SCALING = [0.1, 500, 500, 10, 10, 10, 5, 5]
 DISPLAY_SCALING = [100, 125.7] 
 DATA_OUT_ADDR = [AP_ADDR]
@@ -85,10 +87,10 @@ class Model:
 
         self.pll = ok.PLL22393()
         self.pll.SetReference(48)        #base clock frequency
-        self.baseRate = 24 #in MHz
+        self.baseRate = 48 #in MHz
         self.pll.SetPLLParameters(0, self.baseRate, 48,  True)            #multiply up to baseRate 
         self.pll.SetOutputSource(0, ok.PLL22393.ClkSrc_PLL0_0)  #clk1 
-        self.clkRate = 0.25                                #mhz; 200 is fastest
+        self.clkRate = 1                                #mhz; 200 is fastest
         self.pll.SetOutputDivider(0, int(self.baseRate / self.clkRate)) 
         self.pll.SetOutputEnable(0, True)
         ## self.pll.SetOutputSource(1, ok.PLL22393.ClkSrc_PLL0_0)  #clk2
@@ -137,15 +139,20 @@ class Model:
             self.xem.SetWireInValue(0x00, 0x00, 0xff)
         self.xem.UpdateWireIns()
 
-    def SendPara(self, trigEvent, newVal, newVal2 = None):
+    def SendPara(self, newVal, trigEvent):
+        if trigEvent == DATA_EVT_PPS:
+            bitVal = ConvertType(newVal, fromType = 'f', toType = 'I')
+            bitValLo = bitVal & 0xffff
+            bitValHi = (bitVal >> 16) & 0xffff
+            self.xem.SetWireInValue(0x01, bitValLo, 0xffff)
+            self.xem.SetWireInValue(0x02, bitValHi, 0xffff)
+            self.xem.UpdateWireIns()
+            self.xem.ActivateTriggerIn(0x50, DATA_EVT_PPS)
         if trigEvent == DATA_EVT_CLKRATE:
-            ## self.pll.SetOutputDivider(0, int(newVal))        #div4 = 100 mhz
-            ## self.pll.SetOutputDivider(1, int(newVal))        #div4 = 100 mhz
-            ## self.xem.SetPLL22393Configuration(self.pll)
-            ## self.xem.SetEepromPLL22393Configuration(self.pll)
-            self.xem.SetWireInValue(0x01, int(newVal), 0xffff)
+            ## print "%x" % (newVal & 0xffff),
+            self.xem.SetWireInValue(0x01, newVal & 0xffff, 0xffff)
             self.xem.UpdateWireIns();
-            self.xem.ActivateTriggerIn(0x50, 7)
+            self.xem.ActivateTriggerIn(0x50, DATA_EVT_CLKRATE)
 
 class View(wx.Frame):
     def __init__(self, parent):
@@ -300,17 +307,25 @@ class ChangerView(wx.Frame):
         ## sizer.Add(self.remove, 0, wx.EXPAND | wx.ALL)
         ## self.SetSizer(sizer)
 
-        self.sliderClk = wx.Slider(self.panel, -1, 0, 0, 100, (10, 10), (250, 50),
+
+        self.clkLabel = wx.StaticText(self.panel, -1, "Clock Delayer")
+        self.clkSlider = wx.Slider(self.panel, -1, 10, 0, 100, (10, 10), (250, 50),
                                   wx.SL_HORIZONTAL | wx.SL_AUTOTICKS | wx.SL_LABELS)
         self.tglReset = wx.ToggleButton(self.panel, -1, "Reset", wx.Point(20,25), wx.Size(60,20))
 
-#        self.label1.SetBackgroundColour((self.Red1, self.Green1, self.Blue1))
+        self.ppsLabel = wx.StaticText(self.panel, -1, 'Force', (15, 95))
+        self.ppsSpin = FS.FloatSpin(self.panel, -1, min_val=0, max_val=120,
+                                       increment=0.01, value=0.1, agwStyle=FS.FS_LEFT)
+        self.ppsSpin.SetFormat("%f")
+        self.ppsSpin.SetDigits(2)
 
         self.hbox = wx.BoxSizer(wx.VERTICAL)
-        self.hbox.Add(self.sliderClk, border=5, flag=wx.ALL|wx.EXPAND)
-
+        self.hbox.Add(self.clkLabel, border=5, flag=wx.ALL|wx.EXPAND)
+        self.hbox.Add(self.clkSlider, border=5, flag=wx.ALL|wx.EXPAND)
         self.hbox.Add(self.tglReset, border=5, flag=wx.ALL|wx.EXPAND)
-        self.hbox.Add(self.tglReset,flag=wx.ALIGN_CENTER, border=5)
+        self.hbox.Add(self.ppsLabel, border=5, flag=wx.ALL|wx.EXPAND)
+        self.hbox.Add(self.ppsSpin, border=5, flag=wx.ALL|wx.EXPAND)
+        ## self.hbox.Add(self.tglReset,flag=wx.ALIGN_CENTER, border=5)
 
         self.hbox.Fit(self)
 
@@ -331,8 +346,9 @@ class Controller:
         ## self.ctrlView.remove.Bind(wx.EVT_BUTTON, self.RemoveMoney)
 
         ## self.ctrlView.slider1.Bind(wx.EVT_SLIDER, self.UpdateIa)
-        self.ctrlView.sliderClk.Bind(wx.EVT_SLIDER, self.SendClkRate)
+        self.ctrlView.clkSlider.Bind(wx.EVT_SLIDER, self.SendClkRate)
         self.ctrlView.tglReset.Bind(wx.EVT_TOGGLEBUTTON, self.OnReset)
+        self.ctrlView.ppsSpin.Bind(FS.EVT_FLOATSPIN, self.SendPps)  ## send floating firing rate
 
 
        ## self.ctrlView.Bind(wx.EVT_TOGGLEBUTTON, self.OnReset, self.ctrlView.tglReset)
@@ -343,8 +359,12 @@ class Controller:
         self.ctrlView.Show()
 
     def SendClkRate(self, event):
-        newClkRate = self.ctrlView.sliderClk.GetValue() / 10
-        self.nerfModel.SendPara(newClkRate, DATA_EVT_CLKRATE)
+        newClkRate = self.ctrlView.clkSlider.GetValue() * 100
+        self.nerfModel.SendPara(newVal = newClkRate, trigEvent = DATA_EVT_CLKRATE)
+
+    def SendPps(self, event):
+        newPps = self.ctrlView.ppsSpin.GetValue()
+        self.nerfModel.SendPara(newVal = newPps, trigEvent = DATA_EVT_PPS)
 
     def OnReset(self, evt):
         newReset = self.ctrlView.tglReset.GetValue()
