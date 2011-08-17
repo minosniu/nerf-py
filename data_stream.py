@@ -1,5 +1,7 @@
 """
 Sirish Nandyala
+@sirishn
+
 Opal Kelly acquisition and visualization system using Enthought Chaco and Traits
 
 Two frames are opened: one has the plot and allows configuration of
@@ -24,7 +26,7 @@ from numpy import arange, array, hstack, random
 
 # Enthought imports
 from enthought.traits.api import Array, Bool, Callable, Enum, Float, HasTraits, \
-                                 Instance, Int, Trait
+                                 Instance, Int, Trait, Range
 from enthought.traits.ui.api import Group, HGroup, Item, View, spring, Handler
 from enthought.pyface.timer.api import Timer
 
@@ -32,7 +34,7 @@ from enthought.pyface.timer.api import Timer
 from enthought.chaco.chaco_plot_editor import ChacoPlotItem
 
 PIPE_IN_ADDR = 0x80
-BIT_FILE = "../nerf/projects/pipe_in_wave_2048/pipe_in_wave_2048_xem3050.bit"            
+BIT_FILE = "../nerfb/projects/spindle_neuron/spindle_neuron_xem6010.bit"            
 class Model:
     """Opal Kelly FPGA
     """
@@ -81,7 +83,7 @@ class Model:
 
         buf = "" 
         for x in pipeInData:
-            ##print x
+            #print x
             buf += pack('<f', x) # convert float_x to a byte string, '<' = little endian
 
         if self.xem.WriteToBlockPipeIn(PIPE_IN_ADDR, 4, buf) == len(buf):
@@ -98,7 +100,10 @@ class Model:
         outValLo = self.xem.GetWireOutValue(getAddr) & 0xffff # length = 16-bit
         outValHi = self.xem.GetWireOutValue(getAddr + 0x01) & 0xffff
         outVal = ((outValHi << 16) + outValLo) & 0xFFFFFFFF
-        outVal = ConvertType(outVal, 'I', 'f')
+        if (getAddr != 0x24):
+            outVal = ConvertType(outVal, 'I', 'f')
+        else:
+            outVal = ConvertType(outVal, 'I', 'i')
         ##if (getAddr == EMG1_ADDR) | (getAddr == EMG2_ADDR):
         ##if getAddr == (EMG1_ADDR):
         ##    outVal = ConvertType(outVal, 'I', 'i')
@@ -133,9 +138,9 @@ class Viewer(HasTraits):
     # This "view" attribute defines how an instance of this class will
     # be displayed when .edit_traits() is called on it.  (See MyApp.OnInit()
     # below.)
-    view = View(ChacoPlotItem("index", "data",
+    view = View(    ChacoPlotItem("index", "data",
                                type_trait="plot_type",
-                               resizable=True,
+                               resizable=False,
                                x_label="Time",
                                y_label="Signal",
                                color="blue",
@@ -146,9 +151,9 @@ class Viewer(HasTraits):
                                width=800,
                                height=380,
                                show_label=False),
-		ChacoPlotItem("index", "data2",
+                    ChacoPlotItem("index", "data2",
                                type_trait="plot_type",
-                               resizable=True,
+                               resizable=False,
                                x_label="Time",
                                y_label="Signal",
                                color="blue",
@@ -159,23 +164,29 @@ class Viewer(HasTraits):
                                width=800,
                                height=380,
                                show_label=False),
-                HGroup(spring, Item("plot_type", style='custom'), spring),
-                resizable = True,
-                buttons = ["OK"],
-                width=800, height=500)
+                                HGroup(spring, Item("plot_type", style='custom'), spring),
+                                resizable = True,
+                                buttons = ["OK"],
+                                width=800, height=850) 
 
 
 class Controller(HasTraits):
     nerfModel = Model() 
+    pipeInData = gen()
+    nerfModel.SendPipe(pipeInData)
 
     # A reference to the plot viewer object
     viewer = Instance(Viewer)
     
     # Some parameters controller the random signal that will be generated
     distribution_type = Enum("1 Hz", "4 Hz")
-    mean = Float(0.0)
-    stddev = Float(1.0)
-    
+    clk_divider = Range(0,1000)
+    def _clk_divider_default(self): return 1000
+    nerfModel.xem.SetWireInValue(0x02, 1000)
+    nerfModel.xem.SetWireInValue(0x00, 0)
+    nerfModel.xem.UpdateWireIns()
+    nerfModel.xem.ActivateTriggerIn(0x50, 7)
+	
     # The max number of data points to accumulate and show in the plot
     max_num_points = Int(100)
     
@@ -189,9 +200,8 @@ class Controller(HasTraits):
     # it can be set to any callable object.
     _generator = Trait(random.normal, Callable)
     
-    view = View(Group('distribution_type', 
-                      'mean', 
-                      'stddev',
+    view = View(Item('clk_divider'),
+                Group('distribution_type', 
                       'max_num_points',
                       orientation="vertical"),
                       buttons=["OK", "Cancel"])
@@ -203,8 +213,8 @@ class Controller(HasTraits):
         """
         # Generate a new number and increment the tick count
         #new_val = self._generator(self.mean, self.stddev)
-	new_val2 = self.nerfModel.ReadFPGA(0x20)
         new_val = self.nerfModel.ReadFPGA(0x22)
+        new_val2 = self.nerfModel.ReadFPGA(0x20)
         self.num_ticks += 1
         
         # grab the existing data, truncate it, and append the new point.
@@ -216,11 +226,16 @@ class Controller(HasTraits):
         
         self.viewer.index = new_index
         self.viewer.data = new_data
-
-	cur_data = self.viewer.data2
-	new_data = hstack((cur_data[-self.max_num_points+1:], [new_val2]))
-	self.viewer.data2 = new_data 
+        cur_data = self.viewer.data2
+        new_data = hstack((cur_data[-self.max_num_points+1:], [new_val2]))
+        self.viewer.data2 = new_data 
         return
+
+    def _clk_divider_changed(self):
+        #print 'clk divider at %s' % self.clk_divider 
+        self.nerfModel.xem.SetWireInValue(0x02, self.clk_divider)
+        self.nerfModel.xem.UpdateWireIns()
+        self.nerfModel.xem.ActivateTriggerIn(0x50, 7)
 
     def _distribution_type_changed(self):
         # This listens for a change in the type of distribution to use.
@@ -228,8 +243,10 @@ class Controller(HasTraits):
         	pipeInData = gen()
     		self.nerfModel.SendPipe(pipeInData)
         else:
-		pipeInData = gen()
-		self.nerfModel.SendPipe(pipeInData)
+            pipeInData = gen4hz()
+            self.nerfModel.SendPipe(pipeInData)
+            print self.clk_divider
+
 
 # wxApp used when this file is run from the command line.
 
@@ -259,7 +276,7 @@ class MyApp(wx.PySimpleApp):
         # Start up the timer!  We have to tell it how many milliseconds
         # to wait between timer events.  For now we will hardcode it
         # to be 100 ms, so we get 10 points per second.
-        self.timer.Start(100.0, wx.TIMER_CONTINUOUS)
+        self.timer.Start(25.0, wx.TIMER_CONTINUOUS)
         return
 
 def ConvertType(val, fromType, toType):
