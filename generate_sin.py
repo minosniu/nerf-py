@@ -1,5 +1,5 @@
 from numpy import *
-
+from struct import pack, unpack
 def gen(SAMPLING_RATE = 1024):
     f = 1 # in Hz, continuous freq
     T = 1.0 / SAMPLING_RATE # in seconds
@@ -27,6 +27,9 @@ def gen4hz(SAMPLING_RATE = 1024):
 
     x = AMP * sin(w * n) + BIAS
     return x
+
+def ConvertType(val, fromType, toType):
+    return unpack(toType, pack(fromType, val))[0]
 
 if __name__ == '__main__':
     from pylab import *

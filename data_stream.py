@@ -12,7 +12,8 @@ by the user.
 """
 
 
-from generate_sin import gen, gen4hz
+from generate_sin import gen, gen4hz, ConvertType
+from generate_tri import gen as gen_tri
 from struct import pack, unpack
 import os.path
 import opalkelly_4_0_3.ok as ok
@@ -26,7 +27,7 @@ from numpy import arange, array, hstack, random
 
 # Enthought imports
 from enthought.traits.api import Array, Bool, Callable, Enum, Float, HasTraits, \
-                                 Instance, Int, Trait, Range
+                                 Instance, Int, Trait, Range, Button
 from enthought.traits.ui.api import Group, HGroup, Item, View, spring, Handler
 from enthought.pyface.timer.api import Timer
 
@@ -34,7 +35,7 @@ from enthought.pyface.timer.api import Timer
 from enthought.chaco.chaco_plot_editor import ChacoPlotItem
 
 PIPE_IN_ADDR = 0x80
-BIT_FILE = "../nerfb/projects/spindle_neuron/spindle_neuron_xem6010.bit"            
+BIT_FILE = "../nerf/projects/spindle_neuron/spindle_neuron_xem6010.bit"            
 class Model:
     """Opal Kelly FPGA
     """
@@ -83,43 +84,30 @@ class Model:
 
         buf = "" 
         for x in pipeInData:
-            #print x
+            print x
             buf += pack('<f', x) # convert float_x to a byte string, '<' = little endian
 
         if self.xem.WriteToBlockPipeIn(PIPE_IN_ADDR, 4, buf) == len(buf):
             print "%d bytes sent via PipeIn!" % len(buf)
         else:
             print "SendPipe failed!"
-            
+
     def ReadFPGA(self, getAddr):
 
         """ getAddr = 0x20 -- 0x3F (maximal in OkHost)
         """
         self.xem.UpdateWireOuts()
+        outVal = getAddr
         ## Read 1 byte output from FPGA
-        outValLo = self.xem.GetWireOutValue(getAddr) & 0xffff # length = 16-bit
-        outValHi = self.xem.GetWireOutValue(getAddr + 0x01) & 0xffff
-        outVal = ((outValHi << 16) + outValLo) & 0xFFFFFFFF
-        if (getAddr != 0x24):
-            outVal = ConvertType(outVal, 'I', 'f')
-        else:
-            outVal = ConvertType(outVal, 'I', 'i')
-        ##if (getAddr == EMG1_ADDR) | (getAddr == EMG2_ADDR):
-        ##if getAddr == (EMG1_ADDR):
-        ##    outVal = ConvertType(outVal, 'I', 'i')
-        ## elif getAddr == UNDERFLOW_ADDR:
-        ##     outVal = ConvertType(outVal, 'I', 'i')
-        ##else:
-        ##    outVal = ConvertType(outVal, 'I', 'f')
-        ## if getAddr == DATA_OUT_ADDR[1]:
-        ##      print "%2.2f" % outVal, 
+        for i in range(len(getAddr)):
+            outValLo = self.xem.GetWireOutValue(getAddr[i]) & 0xffff # length = 16-bit
+            outValHi = self.xem.GetWireOutValue(getAddr[i] + 0x01) & 0xffff
+            outVal[i] = ((outValHi << 16) + outValLo) & 0xFFFFFFFF
+            if (getAddr[i] != 0x24):
+                outVal[i] = ConvertType(outVal[i], 'I', 'f')
+            else:
+                outVal[i] = ConvertType(outVal[i], 'I', 'i')
         
-        ## Python default int is unsigned, use pack/unpack to
-        ## convert into signed
-##        outVal = ConvertType(outVal, fromType = 'I', toType = 'i')
-        ## if (outVal & 0x80):
-        ##     outVal = -0x80 + outVal
-            ## outVal = -(~(outVal - 0x1) & 0xFF)
         return outVal
 
 class Viewer(HasTraits):
@@ -166,26 +154,49 @@ class Viewer(HasTraits):
                                show_label=False),
                                 HGroup(spring, Item("plot_type", style='custom'), spring),
                                 resizable = True,
-                                buttons = ["OK"],
-                                width=800, height=850) 
+                                width=800, height=810,
+                                title = "Output Plot") 
 
 
 class Controller(HasTraits):
-    nerfModel = Model() 
+
+    #### Initialize Simulation #################################
+    nerfModel = Model()
+    # Send test waveform 
     pipeInData = gen()
     nerfModel.SendPipe(pipeInData)
+    # Send initial clock divider and clear all reset signals
+    nerfModel.xem.SetWireInValue(0x01, 1000)
+    nerfModel.xem.SetWireInValue(0x00, 0)
+    nerfModel.xem.UpdateWireIns()
+    nerfModel.xem.ActivateTriggerIn(0x50, 7)
+    # Send initial dynamic gamma
+    bitVal = ConvertType(80.0, fromType = 'f', toType = 'I')
+    bitValLo = bitVal & 0xffff
+    bitValHi = (bitVal >> 16) & 0xffff
+    nerfModel.xem.SetWireInValue(0x01, bitValLo, 0xffff)
+    nerfModel.xem.SetWireInValue(0x02, bitValHi, 0xffff)
+    nerfModel.xem.UpdateWireIns()
+    nerfModel.xem.ActivateTriggerIn(0x50, 4)
+    # Restart the simulation once initial conditions are set
+    nerfModel.xem.SetWireInValue(0x00, 0x0002, 0xffff)
+    nerfModel.xem.UpdateWireIns()
+    nerfModel.xem.SetWireInValue(0x00, 0x0000, 0xffff)
+    nerfModel.xem.UpdateWireIns()
+    ############################################################
 
     # A reference to the plot viewer object
     viewer = Instance(Viewer)
     
     # Some parameters controller the random signal that will be generated
-    distribution_type = Enum("1 Hz", "4 Hz")
+    distribution_type = Enum("1 Hz", "4 Hz", "Tri")
     clk_divider = Range(0,1000)
+    gamma_dyn = Range(30.0, 80.0)
+    reset_sim = Button
+
     def _clk_divider_default(self): return 1000
-    nerfModel.xem.SetWireInValue(0x02, 1000)
-    nerfModel.xem.SetWireInValue(0x00, 0)
-    nerfModel.xem.UpdateWireIns()
-    nerfModel.xem.ActivateTriggerIn(0x50, 7)
+    def _gamma_dyn_default(self): return 80.0
+
 	
     # The max number of data points to accumulate and show in the plot
     max_num_points = Int(100)
@@ -194,15 +205,11 @@ class Controller(HasTraits):
     # this in order to generate the correct x axis data series.
     num_ticks = Int(0)
     
-    # private reference to the random number generator.  this syntax
-    # just means that self._generator should be initialized to
-    # random.normal, which is a random number function, and in the future
-    # it can be set to any callable object.
-    _generator = Trait(random.normal, Callable)
-    
-    view = View(Item('clk_divider'),
-                Group('distribution_type', 
+    view = View(Group('clk_divider',
+                      'gamma_dyn',
+                      'distribution_type', 
                       'max_num_points',
+                      'reset_sim',
                       orientation="vertical"),
                       buttons=["OK", "Cancel"])
     
@@ -212,9 +219,7 @@ class Controller(HasTraits):
         the .data array of our viewer object.
         """
         # Generate a new number and increment the tick count
-        #new_val = self._generator(self.mean, self.stddev)
-        new_val = self.nerfModel.ReadFPGA(0x22)
-        new_val2 = self.nerfModel.ReadFPGA(0x20)
+        [new_val, new_val2] = self.nerfModel.ReadFPGA([0x22,0x20])        
         self.num_ticks += 1
         
         # grab the existing data, truncate it, and append the new point.
@@ -233,7 +238,7 @@ class Controller(HasTraits):
 
     def _clk_divider_changed(self):
         #print 'clk divider at %s' % self.clk_divider 
-        self.nerfModel.xem.SetWireInValue(0x02, self.clk_divider)
+        self.nerfModel.xem.SetWireInValue(0x01, self.clk_divider)
         self.nerfModel.xem.UpdateWireIns()
         self.nerfModel.xem.ActivateTriggerIn(0x50, 7)
 
@@ -242,12 +247,28 @@ class Controller(HasTraits):
         if self.distribution_type == "1 Hz":
         	pipeInData = gen()
     		self.nerfModel.SendPipe(pipeInData)
-        else:
+        elif self.distribution_type == "4 Hz":
             pipeInData = gen4hz()
             self.nerfModel.SendPipe(pipeInData)
-            print self.clk_divider
+        elif self.distribution_type == "Tri":
+            pipeInData = gen_tri()
+            self.nerfModel.SendPipe(pipeInData)
 
+    def _gamma_dyn_changed(self):
+        bitVal = ConvertType(self.gamma_dyn, fromType = 'f', toType = 'I')
+        bitValLo = bitVal & 0xffff
+        bitValHi = (bitVal >> 16) & 0xffff
+        self.nerfModel.xem.SetWireInValue(0x01, bitValLo, 0xffff)
+        self.nerfModel.xem.SetWireInValue(0x02, bitValHi, 0xffff)
+        self.nerfModel.xem.UpdateWireIns()
+        self.nerfModel.xem.ActivateTriggerIn(0x50, 4)
 
+    def _reset_sim_changed(self):
+        self.nerfModel.xem.SetWireInValue(0x00, 0x0002, 0xffff)
+        self.nerfModel.xem.UpdateWireIns()
+        self.nerfModel.xem.SetWireInValue(0x00, 0x0000, 0xffff)
+        self.nerfModel.xem.UpdateWireIns()
+    
 # wxApp used when this file is run from the command line.
 
 class MyApp(wx.PySimpleApp):
@@ -278,9 +299,6 @@ class MyApp(wx.PySimpleApp):
         # to be 100 ms, so we get 10 points per second.
         self.timer.Start(25.0, wx.TIMER_CONTINUOUS)
         return
-
-def ConvertType(val, fromType, toType):
-    return unpack(toType, pack(fromType, val))[0]
 
 # This is called when this example is to be run in a standalone mode.
 if __name__ == "__main__":
