@@ -8,12 +8,11 @@ import time
 import struct, binascii
 import os
 #from scipy.interpolate import UnivariateSpline
-from generate_waveform import gen_waveform
-from generate_spikes import d_train
-from generate_active_state import s
-from generate_active_state import active_state
+from generate_stretch import gen_waveform
+from generate_spikes import spike_train
 from scipy.signal import butter, filtfilt
-
+from generate_active_force import s, active_state
+from generate_total_force import d_force
 """
 Test and generate the tension curve in Eq.3 of Shadmehr and S.P.Wise
 Eric W. Sohn (wonjoons at usc dot edu)
@@ -37,50 +36,12 @@ T_0_INIT = 0    # initial tension
 # change x to induce change in T. (in Tension-length curve)
 
 # Eq. 3 in Shedmehr, derivative of Tension in the muscle
-def gen_force(T_0, x1, x2, A=0.0):
-    """ Take state variables
-        Return derivatives
-    """
-#    A =   # arbitrary A. 
-    
-    rate_change_x = x2   # slope
-    dT_0 = Kse / b * (Kpe * (x1 - x0) + b * rate_change_x - (1 + Kpe/Kse)*T_0 + A)   # passive + active = total
-#    dT_0 = Kse / b * (- (1 + Kpe/Kse)*T_0 +  A)   # active part only...
-  
-    return dT_0
-
-def gen_force_activeonly(T_0, A=0.0):
-    """ Take state variables
-        Return derivatives
-    """
-#    dT_0 = Kse / b * (- (1 + Kpe/Kse)*T_0 +  A)   # active part only...
-    dT_0 = Kse / b * ( A)   # active part only...
-
-
-    return dT_0
-
-"""
-def ode2 (T_0, x1_i, x2_i):
-    ## Beginning of Heun's Method
-     
-    [dT_0] = gen_force(T_0, x1_i, x2_i)
-    T_0 = T_0 + dT_0 *h
-    [ddT_0] = gen_force(T_0, x1_i, x2_i)
-    T_0 = T_0 + (ddT_0 + dT_0) / 2.0 *h
-   
-    dT_0_plot.append((dT_0 + ddT_0) / 2.0)
-#    T_0_plot.append(T_0)
-    ## End of Heun's Method
-    tension_plot.append(T_0)
-    return T_0
-"""
-
 
 
 def force_length(target_length=1.0, firing_rate=50.0):
-    x, dx = gen_waveform(L1 = 0.01, L2 = target_length)    # x, dx return as arrays 
+    x, dx = gen_waveform(L2 = target_length)    # x, dx return as arrays 
     
-    spikes = d_train(firing_rate = firing_rate, SAMPLING_RATE = SAMPLING_RATE)
+    spikes = spike_train(firing_rate = firing_rate, SAMPLING_RATE = SAMPLING_RATE)
     spike_i1 = spike_i2 = 0.0
     h_i1 = h_i2 = 0.0
     T_i = T_i1 = 0.0
@@ -93,64 +54,18 @@ def force_length(target_length=1.0, firing_rate=50.0):
         spike_i1, spike_i2 = spike_i * SAMPLING_RATE, spike_i1
         h_i1, h_i2 = h_i, h_i1
 
-        dT_i = gen_force(T_i, x_i, dx_i, A = h_i*s(x_i) )   # total force (passive + active)  
+        dT_i = d_force(T_i, x_i, dx_i, A = h_i*s(x_i) )   # total force (passive + active)  
 #        print dT_i
-        if (x_i >= 1.0):
-            T_i = T_i1 + dT_i * (1.0/SAMPLING_RATE)
-        else:
-            T_i = h_i*s(x_i)
+
+        T_i = T_i1 + dT_i * (1.0/SAMPLING_RATE)         
         T_list.append(T_i)
         T_i1 = T_i
         
-
-    ## smoothing the graph (averaging)
-##    xtemp = arange(0, 1, 1.0/SAMPLING_RATE)
-###    stemp=UnivariateSpline(x, T_list, w=None, bbox=[x[0]-100,x[-1]+100], k = 3)
-##    stemp=UnivariateSpline(xtemp, T_list, w=None, s=0,k = 4)
-###    xnew = linspace(0, 1, 0.1)
-##    xnew = arange(0, 1, 0.1)
-##    T_list_filtered = stemp(xnew)
-    
+   
     b, a = butter(N=2, Wn=2*pi*1/SAMPLING_RATE , btype='low', analog=0, output='ba')
     T_list_filtered= filtfilt(b=b, a=a, x=array(T_list))
-#    return T_list[-1] 
     return T_list_filtered[-1]
 
-#    # looping through multiple arrays 
-#    for x_i, dx_i in zip(x, dx):
-#        T_0 = ode2(T_0, x_i, dx_i)
-#        #print T_0
-#    return T_0                
-
-
-def force_length_activeonly(target_length=1.0, firing_rate=50.0):
-    x, dx = gen_waveform(L1 = 0.01, L2 = target_length)    # x, dx return as arrays 
-
-    
-#    x = arange(0, 1, 1.0/SAMPLING_RATE)
-
-    spikes = d_train(firing_rate = firing_rate, SAMPLING_RATE = SAMPLING_RATE)
-    spike_i1 = spike_i2 = 0.0
-    h_i1 = h_i2 = 0.0
-    T_i = T_i1 = 0.0
-    h_list=[]
-    T_list=[]
-
-    for spike_i, x_i in zip(spikes, x):
-        h_i = active_state(spike_i1, spike_i2, h_i1, h_i2)
-        h_list.append(h_i)
-        spike_i1, spike_i2 = spike_i * SAMPLING_RATE, spike_i1
-        h_i1, h_i2 = h_i, h_i1
-
-        dT_i = gen_force_activeonly(T_i, A = h_i*s(x_i) )   # total force (passive + active)  
-        T_i = T_i1 + dT_i * (1.0/SAMPLING_RATE)
-        T_list.append(T_i)
-        T_i1 = T_i
-        
-    ## smoothing the graph (averaging)    
-    b, a = butter(N=2, Wn=2*pi*1/SAMPLING_RATE , btype='low', analog=0, output='ba')
-    T_list_filtered= filtfilt(b=b, a=a, x=array(T_list)) 
-    return T_list_filtered[-1]
 
 
 if __name__ == '__main__':
@@ -165,7 +80,7 @@ if __name__ == '__main__':
     tension = []
 #    tension_plot= []
 #    L2_activeonly = [0.0 + x * 0.05 for x in range (0, 20)]
-    L2 = [0.001 + x * 0.05 for x in range(0, 60)]    
+    L2 = [0.001 + x * 0.02 for x in range(0, 120)]    
 #    print L2_activeonly
     #L2 = [2.0]
     

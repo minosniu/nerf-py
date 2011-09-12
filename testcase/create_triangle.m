@@ -16,23 +16,26 @@
 
 L1=0.90;        %min length     (Mileusnic et al 2006 JNP)
 L2=1.08;        %max length
-V=0.60;         %rising velocity (L0/s)
+V=0.36;         %rising velocity (L0/s)
 SAMPLING_RATE=1024;
 T = 1;          % 1 second of data
 %dt=0.001
 dt = 1/SAMPLING_RATE;
 
-t=linspace(0,T,T/dt+1);
+t=linspace(0,T,T/dt);
 
 L=ones(size(t))*L1;
 
-tstart=T*0.2;
+tstart=T*0;
 
-n_start=tstart/dt+1;n_end=round((L2-L1)/V/dt);
+n_start=tstart/dt+1
+n_end=round((L2-L1)/V/dt)
 
 L(n_start:n_start+n_end-1) = L(n_start:n_start+n_end-1)  +linspace(0,(L2-L1),n_end);
 
 L(n_start+n_end:n_start+n_end*2-1)=L(n_start+n_end:n_start+n_end*2-1)+linspace((L2-L1),0,n_end);
+
+size(t)
 
 plot(t,L);
 

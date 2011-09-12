@@ -2,6 +2,13 @@ import math
 import struct, binascii
 from scipy.io import savemat, loadmat
 import os
+from numpy import *
+from pylab import *
+from math import exp
+from decimal import *
+
+
+
 ##MAT_FILE = './testcase/firing_intervals.mat'
 MAT_FILE = './testcase/triangle.mat'
 
@@ -22,10 +29,15 @@ def ConvertType(val, fromType, toType):
 
 assert os.path.exists(MAT_FILE.encode('utf-8')), ".mat waveform file NOT found!"
 data = loadmat(MAT_FILE)
-#x = data['data']
-#out = data['out']
+x = data['data']
+x = transpose(x)
+#x1 = x[:, 0]      # get the 0th column, length.
+x = x[:, 1]      # get the 1st column, slope.
 
-print data
+len(x)
+plot(x)
+show()
+
 
 #for i in xrange(len(x)) :
 #    packed = x[i]
