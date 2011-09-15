@@ -108,6 +108,7 @@ exp = "gd_sqr/((gd_sqr)+C_60_SQR)"
 exp = "B0_0+B0*x_0"
 exp = "GI[j]*((beta*C_0*x_2+KPR_0*(x_1-LPR0_0)+gamma_term)/KSR_0-LSR0_0)"
 exp = "C_REV_M*(KSR_0*(LCE_0)-(KSR_0+KPR_0)*x_1-CSS_0*(B_0*x_0)*(abs_x2_pow_25)-0.4)"
+exp = "204.0*(x_i-x0)+136*dx_i-4.22*T_i+2.72*A_i"
 tree = parse_exp(exp)
 lbl_cnt = 0
 parsed_tree = disp(tree, 0)

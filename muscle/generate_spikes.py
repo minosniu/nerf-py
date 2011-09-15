@@ -11,7 +11,7 @@ import matplotlib.pyplot  as pyplot
 from scipy import * 
 from scipy.integrate import quad
 
-def spike_train(T=1.0, firing_rate=5.0, SAMPLING_RATE=1024):
+def spike_train(T=1.0, firing_rate=5, SAMPLING_RATE=1024):
 #    for t_i in t:   
 #        temp = (s if (t_i % (firing_interval*R) == 0) else 0)
 #        dtrain.append(temp)
@@ -26,7 +26,7 @@ def spike_train(T=1.0, firing_rate=5.0, SAMPLING_RATE=1024):
 
 if __name__ == '__main__':
     from pylab import *
-    spikes = spike_train(firing_rate = 20.0)
+    spikes = spike_train(firing_rate = 20)
     plot(spikes)
     show()
     print "len_x = %d" % len(spikes)

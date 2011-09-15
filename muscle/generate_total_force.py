@@ -7,7 +7,7 @@ import struct, binascii
 import os
 from generate_stretch import gen_waveform
 from generate_spikes import spike_train
-from generate_active_force import s, active_state
+from generate_active_force import gen_h_diff_eq
 
 
 """
@@ -27,18 +27,36 @@ def d_force(T_0, x1, x2, A=0.0):
     Kse = 136.0     # g / cm
     Kpe = 75.0      # g / cm
     b = 50.0        # g * s / c
-#    A =   # arbitrary A. 
+    
+#    A =   # arbitrary A.   
     
     rate_change_x = x2   # slope
-    if x1 > x0:
-        dT_0 = Kse / b * (Kpe * (x1 - x0) + b * rate_change_x - (1 + Kpe/Kse)*T_0 + A)   # passive + active = total
-    else:
-        dT_0 = Kse / b * (b * rate_change_x - (1 + Kpe/Kse) * T_0 + A)
-#    dT_0 = Kse / b * (- (1 + Kpe/Kse)*T_0 +  A)   # active part only...
+    if False:
+        if x1 > x0:
+            dT_0 = Kse / b * (Kpe * (x1 - x0) + b * rate_change_x - (1 + Kpe/Kse)*T_0 + A)   # passive + active = total
+        else:
+            dT_0 = Kse / b * (b * rate_change_x - (1 + Kpe/Kse) * T_0 + A)
+    if True:
+        #dT_0 = Kse / b * (- (1 + Kpe/Kse)*T_0 + A)   # passive + active = total
+        dT_0 = 2.72*A - 4.22* T_0   # passive + active = total
+
   
     return dT_0
   
-
+def s(x = 1.0):
+#    print x
+    if x < 0.5:
+        weighted = 0.0
+    elif x < 1.0:
+        weighted = -4.0*x**2 + 8.0*x-3.0 
+    elif x <= 2.0:
+        weighted = -x**2 + 2.0*x
+    else: 
+        weighted = 0.0
+#    weighted = 1
+#    print weighted 
+    return weighted
+    
 if __name__ == '__main__':
     from numpy import pi, array
     from pylab import show, plot, grid
@@ -53,20 +71,15 @@ if __name__ == '__main__':
     h_i1 = h_i2 = 0.0
     T_i = T_i1 = 0.0
     x, dx = gen_waveform(L2 = 1.011, SAMPLING_RATE = SAMPLING_RATE)
-
-
-    A_list = []
+    
+        
+    h = gen_h_diff_eq(firing_rate = 10)
     T_list = []
-    for spike_i, x_i, dx_i in zip(spikes, x, dx):
-        h_i = active_state(spike_i1, spike_i2, h_i1, h_i2)
-        A_list.append(h_i *s(x_i) )
-        spike_i1, spike_i2 = spike_i * SAMPLING_RATE, spike_i1
-        h_i1, h_i2 = h_i, h_i1
-
+    for x_i, dx_i,  h_i in zip(x, dx,  h):
        # dT_i = d_force(T_i, x_i, dx_i, A = h_i*s(x_i))   # total force (passive + active)
-        dT_i = d_force(T_i, 1.0, 0.0, A = h_i*s(x_i))   # total force (passive + active)
+        dT_i = d_force(T_i, 1.0, 0.0, A = h_i * s(x_i) )   # total force (passive + active)
         T_i = T_i1 + dT_i * (1.0/SAMPLING_RATE)
-        T_list.append(T_i)
+        T_list.append(dT_i)
         T_i1 = T_i
 #    subplot(211)
 #    plot(T_list)
