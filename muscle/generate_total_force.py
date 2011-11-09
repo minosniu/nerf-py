@@ -35,11 +35,19 @@ def d_force(T_0, x1, x2, A=0.0):
         if x1 > x0:
             dT_0 = Kse / b * (Kpe * (x1 - x0) + b * rate_change_x - (1 + Kpe/Kse)*T_0 + A)   # passive + active = total
         else:
-            dT_0 = Kse / b * (b * rate_change_x - (1 + Kpe/Kse) * T_0 + A)
-    if True:
-        #dT_0 = Kse / b * (- (1 + Kpe/Kse)*T_0 + A)   # passive + active = total
-        dT_0 = 2.72*A - 4.22* T_0   # passive + active = total
+            dT_0 = Kse / b * (Kpe * (x1 - x0) + b * rate_change_x - (1 + Kpe/Kse)*T_0 + A)   # passive + active = total
+            # dT_0 = Kse / b * (b * rate_change_x - (1 + Kpe/Kse) * T_0 + A)
+    if False:
+        dT_0 = Kse / b * (- (1 + Kpe/Kse)*T_0 + A)   # passive + active = total
 
+    if True:
+        x0 = 1.0
+        Kse_x_Kpe_o_b = Kse / b * Kpe # 204.0
+        Kse_o_b_m_one_p_Kpe_o_Kse =  Kse / b * (1 + Kpe/Kse) # 4.22
+        Kse_o_b = Kse / b # 2.72
+        # print Kse_x_Kpe_o_b, Kse_o_b_m_one_p_Kpe_o_Kse, Kse_o_b
+        dT_0 = Kse_x_Kpe_o_b * (x1 - x0) + Kse * x2 - Kse_o_b_m_one_p_Kpe_o_Kse * T_0 + Kse_o_b * A
+        # dT_0 = Kse / b * (Kpe * (x1 - x0) + b * rate_change_x - (1 + Kpe/Kse)*T_0 + A)   # passive + active = total
   
     return dT_0
   
@@ -73,13 +81,15 @@ if __name__ == '__main__':
     x, dx = gen_waveform(L2 = 1.011, SAMPLING_RATE = SAMPLING_RATE)
     
         
-    h = gen_h_diff_eq(firing_rate = 10)
+    h = gen_h_diff_eq(firing_rate = 20)
     T_list = []
     for x_i, dx_i,  h_i in zip(x, dx,  h):
        # dT_i = d_force(T_i, x_i, dx_i, A = h_i*s(x_i))   # total force (passive + active)
-        dT_i = d_force(T_i, 1.0, 0.0, A = h_i * s(x_i) )   # total force (passive + active)
+        # dT_i = d_force(T_i1, 1.0, 0.0, A = h_i * s(1.0) )   # total force (passive + active)
+        dT_i = d_force(T_i, 1.0, 0.0, A = h_i * s(1.0) )   # total force (passive + active)
+        # dT_i = h_i
         T_i = T_i1 + dT_i * (1.0/SAMPLING_RATE)
-        T_list.append(dT_i)
+        T_list.append(T_i)
         T_i1 = T_i
 #    subplot(211)
 #    plot(T_list)

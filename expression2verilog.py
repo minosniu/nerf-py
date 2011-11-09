@@ -58,7 +58,8 @@ def disp(tree, depth, lr = ''):
             node_label = TERM_LABEL + "F%d" % depth
         else:
             node_label = TERM_LABEL + lr + "%d" % depth
-        print "\n //    ", left_label, '\t' + 4* tree.opt + '\t', right_label + "    =>    " + node_label
+        print "\n//    ", left_label, '\t' + 4* tree.opt + '\t', right_label + "    =>    " + node_label
+        print "wire [31:0] %s;" % node_label
         if tree.opt == '+':
             print "add %s_add( .x(%s), .y(%s), .out(%s) );" % (node_label, left_label, right_label, node_label)
         elif tree.opt == '-':
@@ -91,24 +92,8 @@ def disp(tree, depth, lr = ''):
 
 ## exp = "(2/(1+exp(-1000*x[2])))-1"
 ## exp = "(1/M[j])*(KSR[j]*LcePtrs[0]-(KSR[j]+KPR[j])*x[1]-CSS[0]*(B0[j]+B[j]*x[0])*sig[j]*(pow((fabs(x[2])),a[j]))-(F0[j]+F[j]*x[0])-KSR[j]*LSR0[j]+KPR[j]*LPR0[j])"
-exp = "(Ia_fiber[j]>0)*Ia_fiber[j]*(Ia_fiber[j]<100000)+(Ia_fiber[j]>100000)*100000"
-exp = "((a1+a2)+(b1+b2))*((c1+c2)+(d1+d2))"
-exp = "GII[j]*(X[j]*L2nd[j]/LSR0[j]*(LcePtrs[0]-x[1]-LSR0[j])+(1-X[j])*L2nd[j]/LPR0[j]*(LcePtrs[0]-(LcePtrs[0]-x[1]-LSR0[j])-LSR0[j]-LPRN[j]))"
-exp = "GI[j]*(LcePtrs[0]-x[1]-LSR0[j])"
-exp = "(2/(1+exp(-1000*x[2])))-1"
-exp = "GII[j]*(X[j]*L2nd[j]/LSR0[j]*(LcePtrs[0]-x[1]-LSR0[j])+(1-X[j])*L2nd[j]/LPR0[j]*(LcePtrs[0]-(LcePtrs[0]-x[1]-LSR0[j])-LSR0[j]-LPRN[j]))"
-exp = "GI[j]*(LcePtrs[0]-x[1]-LSR0[j])"
-exp = "GII[j]*(C0*Ia_fiber_R1+C1*(LcePtrs[0]-Ia_fiber_R1-C2))"
-exp = "(2/(1+exp_minus_1000_by_x_2))-1"
-exp = "(1/M[j])*(KSR[j]*(LcePtrs[0])-(KSR[j]+KPR[j])*x[1]-CSS[j]*(B0[j]+B[j]*x[0])*sig[j]*(abs_x2_pow_25)-(F0[j]+F[j]*x[0])-KSR[j]*LSR0[j]+KPR[j]*LPR0[j])"
-exp = "C3*(C4-(C5)*x[1]-CSS[j]*(B0[j]+B[j]*x[0])*sig[j]*(abs_x2_pow_25)-(F0[j]+F[j]*x[0])-C6+C7)"
-exp = "C3*(KSR[j]*(LcePtrs[0])-(C5)*x[1]-css_F0*(B0[j]+B[j]*x[0])*sig[j]*(abs_x2_pow_25)-(F0[j]+F[j]*x[0])-C6+C7)"
-exp = "C_REV_M*(KSR[j]*(LcePtrs[0])-(C_KSR_P_KPR)*x[1]-CSS[j]*(B0[j]+B[j]*x[0])*sig[j]*(abs_x2_pow_25)-(F0[j]+F[j]*x[0])-C_KSR_M_LSR0+C_KPR_M_LSR0)"
-exp = "gd_sqr/((gd_sqr)+C_60_SQR)"
-exp = "B0_0+B0*x_0"
-exp = "GI[j]*((beta*C_0*x_2+KPR_0*(x_1-LPR0_0)+gamma_term)/KSR_0-LSR0_0)"
-exp = "C_REV_M*(KSR_0*(LCE_0)-(KSR_0+KPR_0)*x_1-CSS_0*(B_0*x_0)*(abs_x2_pow_25)-0.4)"
-exp = "204.0*(x_i-x0)+136*dx_i-4.22*T_i+2.72*A_i"
+exp = "C_REV_M*(C_KSR*lce-C_KSR_P_KPR*x_1-CSS*(B0+BDAMP*x_0)*(abs_x2_pow_25)-F*x_0-C_KSR_M_LSR0+C_KPR_M_LPR0)"
+exp = "C_REV_M*(C_KSR*lce-C_KSR_P_KPR*x_1-CSS*(B0+BDAMP*x_0)*sig*(abs_x2_pow_25)-(F0+F*x_0)-C_KSR_M_LSR0+C_KPR_M_LPR0)"
 tree = parse_exp(exp)
 lbl_cnt = 0
 parsed_tree = disp(tree, 0)
