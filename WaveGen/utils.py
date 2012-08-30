@@ -11,4 +11,4 @@ def importPluginModulesIn(directory):
 
 def findPluginCreator(category, loaded_plugins):
     assert category in loaded_plugins, "No generator is called '%s' in ./plugin/!" % category
-    return loaded_plugins[category].Gentor
+    return loaded_plugins[category].NewPlugin
