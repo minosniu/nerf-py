@@ -6,8 +6,9 @@ Created on Aug 29, 2012
 import unittest
 from scipy import *
 from numpy import *
+from plugin import WavePlugin
 
-class Gentor(object):
+class Gentor(WavePlugin):
     '''
     classdocs
     '''
