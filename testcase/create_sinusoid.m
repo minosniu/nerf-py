@@ -17,17 +17,20 @@
 L1=0.995;   %average length (Mileusnic et al 2006 JNP)
 A=0.012;    %amplitude
 fs=1;       %frequency
+T = 5;      %1 second of data
+SAMPLING_RATE=1024;
 
-dt=0.001;
-t=linspace(0,5,5/dt+1);
+%dt=0.001
+dt = 1/SAMPLING_RATE;
+t=linspace(0,T,T/dt+1);
 
 
 L=ones(size(t))*(L1+A);
 
-tstart=1;
+tstart=T*0.2;  % 
 
-n1=tstart/dt+1;n2=1/fs/dt;
-L(n1:n1+n2-1) = L(n1:n1+n2-1)  + A*(cos(2*pi*(0:dt:1-dt))-1);
+n_start=tstart/dt+1;n_end=1/fs/dt;
+L(n_start:n_start+n_end-1) = L(n_start:n_start+n_end-1)  + A*(cos(2*pi*(0:dt:1-dt))-1);
 
 plot(t,L);
 
