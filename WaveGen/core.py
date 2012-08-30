@@ -5,7 +5,6 @@ Created on Aug 29, 2012
 '''
 from scipy.signal import butter, filtfilt
 from numpy import pi
-from WaveGen.decontractors import *
 from WaveGen.plugin import PluginProtocol
 
 class SomeWave(object):

@@ -1,2 +1,2 @@
-from core import SomeWave
-from plugin import PluginProtocol
+from WaveGen.core import SomeWave
+from WaveGen.plugin import PluginProtocol
