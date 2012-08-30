@@ -6,7 +6,7 @@ Created on Aug 29, 2012
 import unittest
 from scipy import *
 from numpy import *
-from plugin import PluginProtocol
+from WaveGen.plugin import PluginProtocol
 
 class NewPlugin(PluginProtocol):
     '''

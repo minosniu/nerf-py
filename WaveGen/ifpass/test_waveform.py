@@ -6,7 +6,7 @@ Created on Aug 29, 2012
 import unittest
 import WaveGen
 from pylab import plot, show #@UnusedImport
-from utils import importPluginModulesIn, findPluginCreator
+from WaveGen.utils import importPluginModulesIn, findPluginCreator
 import os
 
 def foo(inval):
