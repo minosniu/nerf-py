@@ -4,7 +4,7 @@ Created on Aug 30, 2012
 @author: labuser
 '''
 
-class WavePlugin(object):
+class PluginProtocol():
     '''
     classdocs
     '''
@@ -14,4 +14,5 @@ class WavePlugin(object):
         '''
         Constructor
         '''
+        self.data = []
         

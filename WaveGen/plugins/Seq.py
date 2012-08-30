@@ -6,9 +6,9 @@ Created on Aug 29, 2012
 import unittest
 from scipy import *
 from numpy import *
-from plugin import WavePlugin
+from plugin import PluginProtocol
 
-class Gentor(WavePlugin):
+class NewPlugin(PluginProtocol):
     '''
     classdocs
     '''
@@ -35,9 +35,7 @@ class Test(unittest.TestCase):
         Test the logic of sin wave, t versus n etc.
         '''
         from pylab import plot, show
-        x = Gentor(1024, TIME =  [0.0, 0.06, 0.07,  0.24,  0.26,  0.43,  0.44,  0.5, 0.5,  0.56, 0.57,  0.74,  0.76,  0.93,  0.94,  1.0],\
-            VALUE = [0.0,  0.0,  1.0,  1.0,  -1.0,  -1.0,  0.0,  0.0,  0.0,  0.0,  -1.0,  -1.0,  1.0,  1.0,  0.0,  0.0], FILT = 'Butter')
-        generator = Gentor(1024)
+        generator = NewPlugin(1024)
         plot(generator.data)
         show()
 
