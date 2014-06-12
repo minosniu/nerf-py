@@ -54,7 +54,7 @@ def force_length(target_length=1.0, firing_rate=50.0):
         spike_i1, spike_i2 = spike_i * SAMPLING_RATE, spike_i1
         h_i1, h_i2 = h_i, h_i1
 
-        dT_i = d_force(T_i, x_i, dx_i, A = h_i*s(x_i) )   # total force (passive + active)  
+        dT_i = d_force(T_i, x_i, dx_i, A = h_i*s(x_i),  firing_rate = firing_rate )   # total force (passive + active)  
 #        print dT_i
 
         T_i = T_i1 + dT_i * (1.0/SAMPLING_RATE)         
@@ -107,7 +107,7 @@ if __name__ == '__main__':
         force20.append(temp2)    
         temp=force_length(target_length=L2_i, firing_rate=30.0)
         force30.append(temp)
-        temp=force_length(target_length=L2_i, firing_rate=40.0)
+        temp=force_length(target_length=L2_i, firing_rate=100.0)
         force40.append(temp)
 
         
