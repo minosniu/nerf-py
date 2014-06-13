@@ -11,7 +11,7 @@ from math import exp
 
 # Generate active state component in the muscle stretch
 
-def active_state(x_i1, x_i2, y_i1, y_i2): 
+def active_state(x_i0, x_i1, x_i2, y_i1, y_i2): 
     """ Transfer function (TF) Coefficients for 
         imp_res= 48144*exp(-t/R/0.0326)-45845*exp(-t/R/0.034), 
         1. Laplace teransform to get TF. (s domain) (tf)
@@ -25,13 +25,28 @@ def active_state(x_i1, x_i2, y_i1, y_i2):
         x_i2: spike [n-2]
         y_i1: A[n-1]  (prev active state #)
         y_i2: A[n-2]  (prev prev active state #)
-    """
-    b0 = 0.0
+            b0 = 0.0
     b1 = 2.185
     b2 = -2.176
     a0 = 1.0
     a1 = -1.942
     a2 = 0.943   
+    """
+    
+    
+    """ New from ta=0.0326 tb=0.036
+Transfer function:
+  2299 z^2 - 2364 z
+----------------------
+z^2 - 1.944 z + 0.9445
+    """
+    b0 = 2299.0
+    b1 = -2289.0
+    b2 = 0.0
+    a0 = 1.0
+    a1 = -1.942
+    a2 = 0.943 
+
 #    scaling_bits = 10
 #    scaling_factor = 1024#0x01 << scaling_bits
     
@@ -56,16 +71,17 @@ def active_state(x_i1, x_i2, y_i1, y_i2):
 
     
     #y_i = int((b1*xx1 + b2* xx2 - a1 * yy1 - a2*yy2) )
+    t0 =  b0*x_i0
     t1 =  b1*x_i1
     t2 =  b2*x_i2
     t3 =  a1 * y_i1 
     t4 =  a2 * y_i2 
     
-    y_i = t1 + t2 - t3 - t4
+    y_i0 = t0 + t1 + t2 - t3 - t4
     #y_i = ((b1*x_i1 + b2* x_i2 - a1 * y_i1 - a2*y_i2) / a0)
     #y_i = int (b1*x_i1 + b2* x_i2 - a1 * y_i1 - a2*y_i2) >> scaling_bits
     
-    return y_i
+    return y_i0
 
 
 
@@ -139,17 +155,17 @@ def gen_h_diff_eq(firing_rate = 10,  SAMPLING_RATE = 1024):
     spikes = spike_train(firing_rate =firing_rate, SAMPLING_RATE = SAMPLING_RATE)
 #    spikes = gen_ramp(T = [0.0, 0.1, 0.11, 0.65, 0.66, 1.0], L = [0.0, 0.0, 1.4, 1.4, 0.0, 0.0], FILT = False)
     spike_i1 = spike_i2 = 0.0
-    h_i1 = h_i2 = 0.0
+    h_i = h_i1 = h_i2 = 0.0
     x_i = 1.0
     
     h_list = []
     
     for spike_i in spikes:
-        h_i = active_state(spike_i1, spike_i2, h_i1, h_i2)
+        h_i = active_state(spike_i, spike_i1, spike_i2, h_i1, h_i2)
 #        h_i = active_state_fuglevand(spike_i1, spike_i2, h_i1, h_i2)
         
         h_list.append(h_i )
-        spike_i1, spike_i2 = int(spike_i * SAMPLING_RATE ), spike_i1
+        spike_i1, spike_i2 = int(spike_i  ), spike_i1
         h_i1, h_i2 = h_i, h_i1
     
     return h_list
