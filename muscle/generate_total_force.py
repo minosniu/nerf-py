@@ -8,7 +8,7 @@ import os
 from generate_stretch import gen_waveform
 from generate_spikes import spike_train
 from generate_active_force import gen_h_diff_eq
-
+import matplotlib.pyplot as plt
 
 """
 Test and generate the tension curve in Eq.3 of Shadmehr and S.P.Wise
@@ -65,23 +65,13 @@ def s(x = 1.0):
 #    print weighted 
     return weighted
     
-if __name__ == '__main__':
-    from numpy import pi, array
-    from pylab import show, plot, grid
-    from scipy.signal import butter, filtfilt
     
-#    from numpy import *
     
-
-    SAMPLING_RATE = 1024
-#    spikes = spike_train(firing_rate =20.0, SAMPLING_RATE = SAMPLING_RATE)
+def plotForce(firing_rate = 10, x=1.0, dx=0.0):
     spike_i1 = spike_i2 = 0.0
     h_i1 = h_i2 = 0.0
     T_i = T_i1 = 0.0
-    x, dx = gen_waveform(L2 = 1.011, SAMPLING_RATE = SAMPLING_RATE)
-    
-        
-    h = gen_h_diff_eq(firing_rate = 10) #7.5, 10
+    h = gen_h_diff_eq(firing_rate = firing_rate) #7.5, 10
     T_list = []
     for x_i, dx_i,  h_i in zip(x, dx,  h):
        # dT_i = d_force(T_i, x_i, dx_i, A = h_i*s(x_i))   # total force (passive + active)
@@ -92,18 +82,68 @@ if __name__ == '__main__':
         T_i = T_i1 + dT_i * (1.0/SAMPLING_RATE)
         T_list.append(T_i)
         T_i1 = T_i
+    return T_list
+    
+    
+if __name__ == '__main__':
+    from numpy import pi, array
+    from pylab import show, plot, grid
+    from scipy.signal import butter, filtfilt
+    
+#    from numpy import *
+    
+
+    SAMPLING_RATE = 1024
+#    spikes = spike_train(firing_rate =20.0, SAMPLING_RATE = SAMPLING_RATE)
+
+    x, dx = gen_waveform(L2 = 1.011, SAMPLING_RATE = SAMPLING_RATE)
+    
+    T_list_1 = []
+    T_list_2 = []
+    T_list_3 = []
+    T_list_4 = []
+    T_list_5 = []
+    T_list_6 = []
+    T_list_1 = plotForce(firing_rate = 5, x=x, dx=dx)
+    T_list_2 = plotForce(firing_rate = 10, x=x, dx=dx)
+    T_list_3 = plotForce(firing_rate = 20, x=x, dx=dx)
+    T_list_4 = plotForce(firing_rate = 50, x=x, dx=dx)
+    T_list_5 = plotForce(firing_rate = 60, x=x, dx=dx)
+    T_list_5 = plotForce(firing_rate = 100, x=x, dx=dx)
+    
+#    h = gen_h_diff_eq(firing_rate = 4.2) #7.5, 10
+#    T_list = []
+#    for x_i, dx_i,  h_i in zip(x, dx,  h):
+#       # dT_i = d_force(T_i, x_i, dx_i, A = h_i*s(x_i))   # total force (passive + active)
+#        # dT_i = d_force(T_i1, 1.0, 0.0, A = h_i * s(1.0) )   # total force (passive + active)
+#        dT_i = d_force(T_i, 1.0, 0.0, A = h_i * s(x_i) )   # total force (passive + active)
+#        #dT_i = d_force(T_i, 1.0, 0.0, A = h_i  )   # total force (passive + active)
+#        # dT_i = h_i
+#        T_i = T_i1 + dT_i * (1.0/SAMPLING_RATE)
+#        T_list.append(T_i)
+#        T_i1 = T_i
+
 #    subplot(211)
 #    plot(T_list)
 #    grid('True')
 
     ## curve smoothing (averaging)
     b, a = butter(N=2, Wn=2*pi*1/SAMPLING_RATE , btype='low', analog=0, output='ba')
-    T_list_filtered= filtfilt(b=b, a=a, x=array(T_list))
-    plot(T_list,'r', T_list_filtered, 'g')
-    grid('on')
-    show()
+    T_list_filtered= filtfilt(b=b, a=a, x=array(T_list_1))
+#    plot(T_list,'r', T_list_filtered, 'g')
+#    plt.plot(T_list_1,'r', label='a', T_list_2, 'b',label='a', T_list_3, 'g', label='a')
+    plt.plot(T_list_1,'r', label='5Hz')
+    plt.plot(T_list_2,'g', label='10Hz')
+    plt.plot(T_list_3,'b', label='20Hz')
+    plt.plot(T_list_4,'b', label='50Hz')
+    plt.plot(T_list_5,'b', label='60Hz')
+    plt.plot(T_list_6,'b', label='100Hz')
     
-    print "len_x = %d" % len(T_list)
+    plt.legend(loc='upper right', numpoints=1)
+    grid('on')
+    plt.show()
+    
+    print "len_x = %d" % len(T_list_1)
 
 
 
